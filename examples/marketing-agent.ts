@@ -2,24 +2,21 @@ import dotenv from 'dotenv'
 dotenv.config()
 
 import { Agent } from '../src'
+import { config } from '../src/config.instance'
 import fs from 'fs'
 import path from 'path'
 import { z } from 'zod'
 import OpenAI from 'openai'
 import { logger } from '../src/logger'
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required')
-}
-
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: config.OPENAI_API_KEY
 })
 
 const marketingManager = new Agent({
   systemPrompt: fs.readFileSync(path.join(__dirname, './system.md'), 'utf8'),
-  apiKey: process.env.OPENSERV_API_KEY,
-  openaiApiKey: process.env.OPENAI_API_KEY
+  apiKey: config.OPENSERV_API_KEY,
+  openaiApiKey: config.OPENAI_API_KEY
 })
 
 marketingManager
@@ -33,7 +30,7 @@ marketingManager
       }),
       async run({ args }) {
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o',
+          model: config.OPENAI_MODEL,
           messages: [
             {
               role: 'system',
@@ -78,7 +75,7 @@ Save the post in markdown format as a file and attach it to the task.
       }),
       async run({ args }) {
         const completion = await openai.chat.completions.create({
-          model: 'gpt-4o',
+          model: config.OPENAI_MODEL,
           messages: [
             {
               role: 'system',

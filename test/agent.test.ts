@@ -311,20 +311,6 @@ describe('Agent API Methods', () => {
 })
 
 describe('Agent Initialization', () => {
-  test('should throw error when API key is missing', () => {
-    assert.throws(
-      () => {
-        new Agent({
-          systemPrompt: 'You are a test agent'
-        })
-      },
-      {
-        message:
-          'OpenServ API key is required. Please provide it in options or set OPENSERV_API_KEY environment variable.'
-      }
-    )
-  })
-
   test('should use default port when not provided', () => {
     const agent = new Agent({
       apiKey: mockApiKey,

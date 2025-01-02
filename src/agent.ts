@@ -33,10 +33,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import OpenAI from 'openai'
 import type { z } from 'zod'
 import { Capability } from './capability'
+import { config } from './config.instance'
 
-const PLATFORM_URL = process.env.OPENSERV_API_URL || 'https://api.openserv.ai'
-const RUNTIME_URL = process.env.OPENSERV_RUNTIME_URL || 'https://agents.openserv.ai'
-const DEFAULT_PORT = Number.parseInt(process.env.PORT || '') || 7378
+const PLATFORM_URL = config.OPENSERV_API_URL
+const RUNTIME_URL = config.OPENSERV_RUNTIME_URL
+const DEFAULT_MODEL = config.OPENAI_MODEL
 
 /**
  * Configuration options for creating a new Agent instance.
@@ -165,12 +166,7 @@ export class Agent {
    */
   private get openai(): OpenAI {
     if (!this._openai) {
-      const apiKey = this.options.openaiApiKey || process.env.OPENAI_API_KEY
-      if (!apiKey) {
-        throw new Error(
-          'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
-        )
-      }
+      const apiKey = this.options.openaiApiKey || config.OPENAI_API_KEY
       this._openai = new OpenAI({ apiKey })
     }
     return this._openai
@@ -187,15 +183,9 @@ export class Agent {
   constructor(private options: AgentOptions) {
     this.app = express()
     this.router = AsyncRouter()
-    this.port = this.options.port || DEFAULT_PORT
+    this.port = this.options.port || config.PORT
     this.systemPrompt = this.options.systemPrompt
-    this.apiKey = this.options.apiKey || process.env.OPENSERV_API_KEY || ''
-
-    if (!this.apiKey) {
-      throw new Error(
-        'OpenServ API key is required. Please provide it in options or set OPENSERV_API_KEY environment variable.'
-      )
-    }
+    this.apiKey = this.options.apiKey || config.OPENSERV_API_KEY
 
     // Initialize API client
     this.apiClient = axios.create({
@@ -543,7 +533,7 @@ export class Agent {
 
     while (iterationCount < MAX_ITERATIONS) {
       completion = await this.openai.chat.completions.create({
-        model: 'gpt-4o',
+        model: DEFAULT_MODEL,
         messages: currentMessages,
         tools: this.openAiTools
       })
