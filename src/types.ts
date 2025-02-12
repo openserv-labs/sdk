@@ -25,6 +25,7 @@ export const doTaskActionSchema = z
       .intersection(
         z.object({
           id: z.number(),
+          uid: z.string().optional(),
           name: z.string(),
           kind: agentKind
         }),
@@ -139,6 +140,7 @@ export const respondChatMessageActionSchema = z
     me: z.intersection(
       z.object({
         id: z.number(),
+        uid: z.string().optional(),
         name: z.string(),
         kind: agentKind
       }),

@@ -28,6 +28,7 @@ describe('Action Schemas', () => {
       type: 'do-task',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -60,6 +61,7 @@ describe('Action Schemas', () => {
       type: 'respond-chat-message',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -91,6 +93,7 @@ describe('Action Schemas', () => {
       type: 'do-task',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -118,6 +121,7 @@ describe('Action Schemas', () => {
       type: 'respond-chat-message',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -377,6 +381,7 @@ describe('Action Schemas', () => {
       type: 'do-task',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: true,
@@ -510,6 +515,7 @@ describe('Action Schemas', () => {
       type: 'do-task',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -584,6 +590,7 @@ describe('Action Schemas', () => {
       type: 'do-task',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -633,6 +640,7 @@ describe('Action Schemas', () => {
       type: 'do-task',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: false
@@ -703,6 +711,7 @@ describe('Action Schemas', () => {
       type: 'respond-chat-message',
       me: {
         id: 1,
+        uid: 'test-agent',
         name: 'test-agent',
         kind: 'external',
         isBuiltByAgentBuilder: true,
