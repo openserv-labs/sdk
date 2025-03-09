@@ -251,6 +251,30 @@ describe('Agent API Methods', () => {
     assert.deepStrictEqual(result, { success: true })
   })
 
+  test('should handle human assistance operations with question in object format', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    // Mock the API client
+    Object.defineProperty(agent, 'apiClient', {
+      value: {
+        post: async () => ({ data: { success: true } })
+      },
+      writable: true
+    })
+
+    const result = await agent.requestHumanAssistance({
+      workspaceId: 1,
+      taskId: 1,
+      type: 'text',
+      question: { question: 'Need help' }
+    })
+
+    assert.deepStrictEqual(result, { success: true })
+  })
+
   test('should handle server lifecycle', async () => {
     const agent = new TestAgent({
       apiKey: mockApiKey,

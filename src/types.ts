@@ -86,7 +86,9 @@ export const doTaskActionSchema = z
               .nullish()
               .openapi({ description: "Human's response to the question" }),
             id: z.number(),
-            question: z.string().openapi({ description: "Agent's question for the user" }),
+            question: z
+              .union([z.string(), z.record(z.any())])
+              .openapi({ description: "Agent's question for the user" }),
             status: z.enum(['pending', 'responded']),
             type: z.enum(['text', 'project-manager-plan-review']).openapi({
               description:
