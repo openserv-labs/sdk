@@ -434,6 +434,56 @@ describe('Agent File Operations', () => {
     })
     assert.deepStrictEqual(uploadResult, { fileId: 'test-file-id' })
   })
+
+  test('should get secrets collection', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    const mockSecretCollection = [
+      {
+        id: 1,
+        name: 'My secret'
+      }
+    ]
+
+    // Mock the API client
+    Object.defineProperty(agent, 'apiClient', {
+      value: {
+        get: async () => ({ data: mockSecretCollection })
+      },
+      writable: true
+    })
+
+    const secretCollection = await agent.getSecrets({
+      workspaceId: 1
+    })
+    assert.deepStrictEqual(secretCollection, mockSecretCollection)
+  })
+
+  test('should get revealed secret value', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    const mockSecretRevealedalue = 'MyRevealedSecretValue'
+
+    // Mock the API client
+    Object.defineProperty(agent, 'apiClient', {
+      value: {
+        get: async () => ({ data: mockSecretRevealedalue })
+      },
+      writable: true
+    })
+
+    const secretValue = await agent.getSecretValue({
+      workspaceId: 1,
+      secretId: 1
+    })
+    assert.deepStrictEqual(secretValue, mockSecretRevealedalue)
+  })
 })
 
 describe('Agent Task Operations', () => {

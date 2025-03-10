@@ -206,6 +206,14 @@ export interface GetFilesParams {
   workspaceId: number
 }
 
+export interface GetSecretsParams {
+  workspaceId: number
+}
+export interface GetSecretValueParams {
+  workspaceId: number
+  secretId: number
+}
+
 export const getFilesParamsSchema = z.object({
   workspaceId: z.number().int().positive()
 })
