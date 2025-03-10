@@ -9,6 +9,8 @@ import { logger } from './logger'
 import type http from 'node:http'
 import type {
   GetFilesParams,
+  GetSecretsParams,
+  GetSecretValueParams,
   UploadFileParams,
   MarkTaskAsErroredParams,
   CompleteTaskParams,
@@ -317,6 +319,30 @@ export class Agent {
    */
   async getFiles(params: GetFilesParams) {
     const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/files`)
+    return response.data
+  }
+
+  /**
+   * Get all secrets for an agent in a workspace.
+   *
+   * @param {GetSecretsParams} params - Parameters for the secrets retrieval
+   * @returns {Promise<any>} List of agent secrets.
+   */
+  async getSecrets(params: GetSecretsParams) {
+    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/agent-secrets`)
+    return response.data
+  }
+
+  /**
+   * Get the value of a secret for an agent in a workspace
+   *
+   * @param {GetSecretValueParams} params - Parameters for the secret value retrieval
+   * @returns {Promise<string>} The value of the secret.
+   */
+  async getSecretValue(params: GetSecretValueParams): Promise<string> {
+    const response = await this.apiClient.get(
+      `/workspaces/${params.workspaceId}/agent-secrets/${params.secretId}/value`
+    )
     return response.data
   }
 
