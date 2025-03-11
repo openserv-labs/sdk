@@ -12,6 +12,8 @@ if (!process.env.OPENAI_API_KEY) {
   throw new Error('OPENAI_API_KEY environment variable is required')
 }
 
+const COST_PER_TOKEN = 0.0003 // this is made up just to be an example
+
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 })
@@ -31,7 +33,7 @@ marketingManager
         platform: z.enum(['twitter', 'linkedin', 'facebook']),
         topic: z.string()
       }),
-      async run({ args }) {
+      async run({ action, args }) {
         const completion = await openai.chat.completions.create({
           model: 'gpt-4o',
           messages: [
@@ -60,6 +62,20 @@ Save the post in markdown format as a file and attach it to the task.
 
         const generatedPost = completion.choices[0].message.content
         logger.info(`Generated ${args.platform} post: ${generatedPost}`)
+
+        if (action) {
+          const isTaskAction = action.type === 'do-task'
+          const workspaceId = action.workspace.id
+          const outputTokens = completion.usage?.total_tokens || 0
+          const cost = outputTokens * COST_PER_TOKEN
+
+          await marketingManager.createUsageRecord({
+            triggerType: isTaskAction ? 'task' : 'chat',
+            workspaceId,
+            taskId: isTaskAction ? action.task.id : undefined,
+            cost
+          })
+        }
 
         return generatedPost || 'Failed to generate post'
       }
