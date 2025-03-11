@@ -466,7 +466,10 @@ describe('Action Schemas', () => {
       workspaceId: 1,
       taskId: 2,
       type: 'text',
-      question: 'Test question'
+      question: {
+        type: 'text',
+        question: 'Test question'
+      }
     }
     assert.ok(textParams)
 
@@ -474,7 +477,7 @@ describe('Action Schemas', () => {
       workspaceId: 1,
       taskId: 2,
       type: 'project-manager-plan-review',
-      question: { plan: 'Test plan' },
+      question: { type: 'project-manager-plan-review', tasks: [] },
       agentDump: { data: 'Test data' }
     }
     assert.ok(reviewParams)
@@ -599,7 +602,10 @@ describe('Action Schemas', () => {
           {
             id: 2,
             type: 'text',
-            question: 'test question',
+            question: {
+              type: 'text',
+              question: 'test question'
+            },
             status: 'pending',
             agentDump: { data: 'test data' },
             humanResponse: null
@@ -607,7 +613,10 @@ describe('Action Schemas', () => {
           {
             id: 3,
             type: 'project-manager-plan-review',
-            question: 'test plan review',
+            question: {
+              type: 'project-manager-plan-review',
+              tasks: []
+            },
             status: 'responded',
             agentDump: { plan: 'test plan' },
             humanResponse: 'approved'
