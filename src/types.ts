@@ -313,3 +313,10 @@ export interface IntegrationCallRequest {
   integrationId: string
   details: ProxyConfiguration
 }
+
+export type UsageRecordParams = {
+  triggerType: 'chat' | 'task'
+  workspaceId: number
+  taskId?: number
+  cost: number
+}

@@ -23,7 +23,8 @@ import type {
   RequestHumanAssistanceParams,
   UpdateTaskStatusParams,
   ProcessParams,
-  IntegrationCallRequest
+  IntegrationCallRequest,
+  UsageRecordParams
 } from './types'
 import type { doTaskActionSchema, respondChatMessageActionSchema } from './types'
 import { actionSchema } from './types'
@@ -565,6 +566,26 @@ export class Agent {
         status: params.status
       }
     )
+    return response.data
+  }
+
+  /**
+   * Creates a usage record for the action.
+   *
+   * @param {UsageRecordParams} params
+   * @param {'chat'|'task'} params.triggerType - Trigger type (either 'chat' or 'task' depending on the action)
+   * @param {number} params.workspaceId - ID of the workspace
+   * @param {number} [params.taskId] - ID of the task (optional for chat actions)
+   * @param {number} params.cost - Cost of the action (should be in dollars, can be $1 at most)
+   * @returns {Promise<void>}
+   */
+  async createUsageRecord(params: UsageRecordParams) {
+    const response = await this.apiClient.post(`/workspaces/${params.workspaceId}/usage-record`, {
+      taskId: params.taskId,
+      triggerType: params.triggerType,
+      serviceCost: params.cost
+    })
+
     return response.data
   }
 
