@@ -18,6 +18,51 @@ export const taskStatusSchema = z
 
 export type TaskStatus = z.infer<typeof taskStatusSchema>
 
+const projectManagerPlanReviewHumanAssistanceQuestionSchema = z.object({
+  tasks: z.array(
+    z.object({
+      index: z.number(),
+      assigneeAgentId: z.number().int(),
+      assigneeAgentName: z.string(),
+      taskDescription: z.string(),
+      taskBody: z.string(),
+      input: z.string(),
+      expectedOutput: z.string()
+    })
+  )
+})
+
+const baseHumanAssistanceRequestSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      type: z.literal('text'),
+      question: z.object({
+        type: z.literal('text'),
+        question: z.string().trim().min(1).openapi({ description: 'Your question for the user' })
+      })
+    })
+    .openapi({
+      description:
+        "The type is 'text' and the question is a known object. This is what your agents will typically use."
+    }),
+  z.object({
+    type: z.literal('project-manager-plan-review'),
+    question: projectManagerPlanReviewHumanAssistanceQuestionSchema.extend({
+      type: z.literal('project-manager-plan-review')
+    })
+  }),
+  z.object({
+    type: z.literal('insufficient-balance'),
+    question: z.object({
+      type: z.literal('insufficient-balance')
+    })
+  }),
+  z.object({
+    type: z.literal('json'),
+    question: z.any()
+  })
+])
+
 export const doTaskActionSchema = z
   .object({
     type: z.literal('do-task'),
@@ -75,25 +120,23 @@ export const doTaskActionSchema = z
         )
         .openapi({ description: 'List of dependant tasks' }),
       humanAssistanceRequests: z.array(
-        z
-          .object({
-            agentDump: z.unknown().openapi({
-              description:
-                "Agent's internal data. Anything the agent wanted to store in the context of this human assistant request."
-            }),
-            humanResponse: z
-              .string()
-              .nullish()
-              .openapi({ description: "Human's response to the question" }),
-            id: z.number(),
-            question: z.string().openapi({ description: "Agent's question for the user" }),
-            status: z.enum(['pending', 'responded']),
-            type: z.enum(['text', 'project-manager-plan-review']).openapi({
-              description:
-                "'project-manager-plan-review' is initiaded by a Project Manager agent to let the user confirm the project plan for this workspace."
+        z.intersection(
+          baseHumanAssistanceRequestSchema,
+          z
+            .object({
+              agentDump: z.unknown().openapi({
+                description:
+                  "Agent's internal data. Anything the agent wanted to store in the context of this human assistant request."
+              }),
+              humanResponse: z
+                .string()
+                .nullish()
+                .openapi({ description: "Human's response to the question" }),
+              id: z.number(),
+              status: z.enum(['pending', 'responded'])
             })
-          })
-          .openapi({ description: 'List of Human Assistance Requests' })
+            .openapi({ description: 'List of Human Assistance Requests' })
+        )
       )
     }),
     workspace: z.object({

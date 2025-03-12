@@ -538,11 +538,25 @@ export class Agent {
    * @returns {Promise<any>} The created assistance request details
    */
   async requestHumanAssistance(params: RequestHumanAssistanceParams) {
+    let question = params.question
+
+    if (typeof question === 'string') {
+      question = {
+        type: 'text',
+        question
+      }
+    } else {
+      question = {
+        type: 'json',
+        ...question
+      }
+    }
+
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/human-assistance`,
       {
         type: params.type,
-        question: params.question,
+        question,
         agentDump: params.agentDump
       }
     )
