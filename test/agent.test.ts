@@ -94,11 +94,11 @@ describe('Agent', () => {
     }
   })
 
-  test('should handle process request', async () => {
+  test('should handle process request with OpenAI', async () => {
     const agent = new Agent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-key'
+      llmApiKey: 'test-key'
     })
 
     agent.addCapability({
@@ -110,8 +110,8 @@ describe('Agent', () => {
       run: async ({ args }) => args.input
     })
 
-    // Mock the OpenAI client
-    Object.defineProperty(agent, '_openai', {
+    // Mock the LLM client
+    Object.defineProperty(agent, '_llmClient', {
       value: {
         chat: {
           completions: {
@@ -142,6 +142,58 @@ describe('Agent', () => {
     })
 
     assert.ok(response.choices[0].message)
+  })
+
+  test('should handle process request with Gemini', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      llmProvider: 'gemini',
+      llmApiKey: 'test-key'
+    })
+
+    agent.addCapability({
+      name: 'testTool',
+      description: 'A test tool',
+      schema: z.object({
+        input: z.string()
+      }),
+      run: async ({ args }) => args.input
+    })
+
+    // Mock the LLM client
+    Object.defineProperty(agent, '_llmClient', {
+      value: {
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: 'Hello from Gemini',
+                    tool_calls: undefined
+                  }
+                }
+              ]
+            })
+          }
+        }
+      },
+      writable: true
+    })
+
+    const response = await agent.process({
+      messages: [
+        {
+          role: 'user',
+          content: 'Hello'
+        }
+      ]
+    })
+
+    assert.ok(response.choices[0].message)
+    assert.strictEqual(response.choices[0].message.content, 'Hello from Gemini')
   })
 })
 
@@ -375,6 +427,37 @@ describe('Agent Initialization', () => {
       systemPrompt: 'You are a test agent'
     })
     assert.strictEqual(agent.testPort, 7378) // Default port
+  })
+  
+  test('should use default model based on provider', () => {
+    const openaiAgent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+    
+    // @ts-expect-error Accessing private member for testing
+    assert.strictEqual(openaiAgent.llmModel, 'gpt-4o')
+    
+    const geminiAgent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      llmProvider: 'gemini'
+    })
+    
+    // @ts-expect-error Accessing private member for testing
+    assert.strictEqual(geminiAgent.llmModel, 'gemini-2.0-flash')
+  })
+  
+  test('should use custom model when provided', () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      llmProvider: 'gemini',
+      llmModel: 'gemini-1.5-pro'
+    })
+    
+    // @ts-expect-error Accessing private member for testing
+    assert.strictEqual(agent.llmModel, 'gemini-1.5-pro')
   })
 })
 
@@ -661,11 +744,11 @@ describe('Agent Task Management', () => {
 })
 
 describe('Agent Process Methods', () => {
-  test('should handle empty OpenAI response', async () => {
+  test('should handle empty LLM response', async () => {
     const agent = new Agent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-key'
+      llmApiKey: 'test-key'
     })
 
     interface EmptyResponseMock {
@@ -678,8 +761,8 @@ describe('Agent Process Methods', () => {
       }
     }
 
-    // Mock the OpenAI client with empty response
-    Object.defineProperty(agent, '_openai', {
+    // Mock the LLM client with empty response
+    Object.defineProperty(agent, '_llmClient', {
       value: {
         chat: {
           completions: {
@@ -699,15 +782,58 @@ describe('Agent Process Methods', () => {
       throw new Error('Should have thrown error for empty response')
     } catch (error) {
       assert.ok(error instanceof Error)
-      assert.strictEqual(error.message, 'No response from OpenAI')
+      assert.strictEqual(error.message, 'No response from openai')
     }
   })
 
-  test('should handle OpenAI response with tool calls', async () => {
+  test('should handle empty Gemini response', async () => {
     const agent = new Agent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-key'
+      llmProvider: 'gemini',
+      llmApiKey: 'test-key'
+    })
+
+    interface EmptyResponseMock {
+      chat: {
+        completions: {
+          create: () => Promise<{
+            choices: never[]
+          }>
+        }
+      }
+    }
+
+    // Mock the LLM client with empty response
+    Object.defineProperty(agent, '_llmClient', {
+      value: {
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: []
+            })
+          }
+        }
+      } as EmptyResponseMock,
+      writable: true
+    })
+
+    try {
+      await agent.process({
+        messages: [{ role: 'user', content: 'Hello' }]
+      })
+      throw new Error('Should have thrown error for empty response')
+    } catch (error) {
+      assert.ok(error instanceof Error)
+      assert.strictEqual(error.message, 'No response from gemini')
+    }
+  })
+
+  test('should handle LLM response with tool calls', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      llmApiKey: 'test-key'
     })
 
     // Add a test tool
@@ -721,8 +847,8 @@ describe('Agent Process Methods', () => {
     })
 
     let callCount = 0
-    // Mock the OpenAI client with tool calls followed by completion
-    Object.defineProperty(agent, '_openai', {
+    // Mock the LLM client with tool calls followed by completion
+    Object.defineProperty(agent, '_llmClient', {
       value: {
         chat: {
           completions: {
@@ -782,11 +908,11 @@ describe('Agent Action Handling', () => {
     const agent = new Agent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-key'
+      llmApiKey: 'test-key'
     })
 
-    // Mock both OpenAI and runtime clients
-    Object.defineProperty(agent, '_openai', {
+    // Mock both LLM and runtime clients
+    Object.defineProperty(agent, '_llmClient', {
       value: {
         chat: {
           completions: {
@@ -845,10 +971,10 @@ describe('Agent Action Handling', () => {
     const agent = new Agent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-key'
+      llmApiKey: 'test-key'
     })
 
-    interface OpenAIClientMock {
+    interface LLMClientMock {
       chat: {
         completions: {
           create: () => Promise<{
@@ -864,8 +990,8 @@ describe('Agent Action Handling', () => {
       }
     }
 
-    // Mock both OpenAI and runtime clients
-    Object.defineProperty(agent, '_openai', {
+    // Mock both LLM and runtime clients
+    Object.defineProperty(agent, '_llmClient', {
       value: {
         chat: {
           completions: {
@@ -882,7 +1008,7 @@ describe('Agent Action Handling', () => {
             })
           }
         }
-      } as OpenAIClientMock,
+      } as LLMClientMock,
       writable: true
     })
 
