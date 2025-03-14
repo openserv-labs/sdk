@@ -16,8 +16,8 @@ class TestAgent extends Agent {
     return this.respondToChat(action)
   }
 
-  public set testOpenAI(client: OpenAI) {
-    this._openai = client
+  public set testLLMClient(client: OpenAI) {
+    this._llmClient = client
   }
 }
 
@@ -54,11 +54,11 @@ describe('Agent API Methods', () => {
     }
   })
 
-  test('should make process method available when openaiApiKey is provided', () => {
+  test('should make process method available when llmApiKey is provided', () => {
     const agent = new Agent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-openai-key'
+      llmApiKey: 'test-llm-key'
     })
 
     assert.ok(typeof agent.process === 'function')
@@ -84,13 +84,42 @@ describe('Agent API Methods', () => {
         () => agent.process({ messages: [{ role: 'user', content: 'test message' }] }),
         {
           message:
-            'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
+            'OPENAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
         }
       )
     } finally {
       // Restore original env var
       if (originalApiKey !== undefined) {
         process.env.OPENAI_API_KEY = originalApiKey
+      }
+    }
+  })
+
+  test('should throw error when process is called without Gemini API key', async () => {
+    // Save original env var
+    const originalApiKey = process.env.GEMINI_API_KEY
+    // Clear env var for test
+    // biome-ignore lint/performance/noDelete: This is a test, fgs.
+    delete process.env.GEMINI_API_KEY
+
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      llmProvider: 'gemini'
+    })
+
+    try {
+      await assert.rejects(
+        () => agent.process({ messages: [{ role: 'user', content: 'test message' }] }),
+        {
+          message:
+            'GEMINI API key is required for process(). Please provide it in options or set GEMINI_API_KEY environment variable.'
+        }
+      )
+    } finally {
+      // Restore original env var
+      if (originalApiKey !== undefined) {
+        process.env.GEMINI_API_KEY = originalApiKey
       }
     }
   })
@@ -130,22 +159,22 @@ describe('Agent API Methods', () => {
     }
   })
 
-  test('should handle errors in process method', async () => {
+  test('should handle errors in process method with OpenAI', async () => {
     let handledError: Error | undefined
     let handledContext: Record<string, unknown> | undefined
 
     const agent = new TestAgent({
       apiKey: mockApiKey,
       systemPrompt: 'You are a test agent',
-      openaiApiKey: 'test-key',
+      llmApiKey: 'test-key',
       onError: (error, context) => {
         handledError = error
         handledContext = context
       }
     })
 
-    // Mock OpenAI to throw an error
-    agent.testOpenAI = {
+    // Mock LLM client to throw an error
+    agent.testLLMClient = {
       chat: {
         completions: {
           create: async () => {
@@ -163,6 +192,43 @@ describe('Agent API Methods', () => {
 
     assert.ok(handledError instanceof Error)
     assert.equal(handledError?.message, 'OpenAI error')
+    assert.equal(handledContext?.context, 'process')
+  })
+
+  test('should handle errors in process method with Gemini', async () => {
+    let handledError: Error | undefined
+    let handledContext: Record<string, unknown> | undefined
+
+    const agent = new TestAgent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      llmProvider: 'gemini',
+      llmApiKey: 'test-key',
+      onError: (error, context) => {
+        handledError = error
+        handledContext = context
+      }
+    })
+
+    // Mock LLM client to throw an error
+    agent.testLLMClient = {
+      chat: {
+        completions: {
+          create: async () => {
+            throw new Error('Gemini error')
+          }
+        }
+      }
+    } as unknown as OpenAI
+
+    try {
+      await agent.process({ messages: [{ role: 'user', content: 'test' }] })
+    } catch (error) {
+      // Expected error
+    }
+
+    assert.ok(handledError instanceof Error)
+    assert.equal(handledError?.message, 'Gemini error')
     assert.equal(handledContext?.context, 'process')
   })
 

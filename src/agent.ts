@@ -43,6 +43,11 @@ const RUNTIME_URL = process.env.OPENSERV_RUNTIME_URL || 'https://agents.openserv
 const DEFAULT_PORT = Number.parseInt(process.env.PORT || '') || 7378
 
 /**
+ * LLM provider options
+ */
+export type LLMProvider = 'openai' | 'gemini'
+
+/**
  * Configuration options for creating a new Agent instance.
  */
 export interface AgentOptions {
@@ -65,11 +70,23 @@ export interface AgentOptions {
   systemPrompt: string
 
   /**
-   * The OpenAI API key for chat completions.
-   * Can also be provided via OPENAI_API_KEY environment variable.
+   * The API key for LLM provider (OpenAI or Gemini).
+   * Can also be provided via OPENAI_API_KEY or GEMINI_API_KEY environment variable.
    * Required when using the process() method.
    */
-  openaiApiKey?: string
+  llmApiKey?: string
+
+  /**
+   * The LLM provider to use (OpenAI or Gemini).
+   * Defaults to 'openai' if not specified.
+   */
+  llmProvider?: LLMProvider
+
+  /**
+   * The model to use for the LLM provider.
+   * Defaults to 'gpt-4o' for OpenAI and 'gemini-2.0-flash' for Gemini.
+   */
+  llmModel?: string
 
   /**
    * Error handler function for all agent operations.
@@ -145,11 +162,23 @@ export class Agent {
   protected runtimeClient: AxiosInstance
 
   /**
-   * OpenAI client instance.
+   * LLM client instance (OpenAI or Gemini).
    * Lazily initialized when needed using the provided API key.
    * @protected
    */
-  protected _openai?: OpenAI
+  protected _llmClient?: OpenAI
+
+  /**
+   * The LLM provider to use (OpenAI or Gemini).
+   * @private
+   */
+  private llmProvider: LLMProvider
+
+  /**
+   * The model to use for the LLM provider.
+   * @private
+   */
+  private llmModel: string
 
   /**
    * Getter that converts the agent's tools into OpenAI function calling format.
@@ -169,23 +198,39 @@ export class Agent {
   }
 
   /**
-   * Getter that provides access to the OpenAI client instance.
+   * Getter that provides access to the LLM client instance.
    * Lazily initializes the client with the API key from options or environment.
    * @private
-   * @throws {Error} If no OpenAI API key is available
-   * @returns {OpenAI} The OpenAI client instance
+   * @throws {Error} If no API key is available
+   * @returns {OpenAI} The LLM client instance
    */
-  private get openai(): OpenAI {
-    if (!this._openai) {
-      const apiKey = this.options.openaiApiKey || process.env.OPENAI_API_KEY
+  private get llmClient(): OpenAI {
+    if (!this._llmClient) {
+      const provider = this.llmProvider;
+      let apiKey: string | undefined;
+      let baseURL: string | undefined;
+      
+      if (provider === 'gemini') {
+        apiKey = this.options.llmApiKey || process.env.GEMINI_API_KEY;
+        baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+      } else {
+        apiKey = this.options.llmApiKey || process.env.OPENAI_API_KEY;
+      }
+      
       if (!apiKey) {
         throw new Error(
-          'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
+          `${provider.toUpperCase()} API key is required for process(). Please provide it in options or set ${provider.toUpperCase()}_API_KEY environment variable.`
         )
       }
-      this._openai = new OpenAI({ apiKey })
+      
+      const config: any = { apiKey };
+      if (baseURL) {
+        config.baseURL = baseURL;
+      }
+      
+      this._llmClient = new OpenAI(config);
     }
-    return this._openai
+    return this._llmClient
   }
 
   /**
@@ -202,6 +247,14 @@ export class Agent {
     this.port = this.options.port || DEFAULT_PORT
     this.systemPrompt = this.options.systemPrompt
     this.apiKey = this.options.apiKey || process.env.OPENSERV_API_KEY || ''
+    this.llmProvider = this.options.llmProvider || 'openai'
+    
+    // Set default model based on provider
+    if (this.options.llmModel) {
+      this.llmModel = this.options.llmModel
+    } else {
+      this.llmModel = this.llmProvider === 'gemini' ? 'gemini-2.0-flash' : 'gpt-4o'
+    }
 
     if (!this.apiKey) {
       throw new Error(
@@ -583,19 +636,27 @@ export class Agent {
   }
 
   /**
-   * Processes a conversation with OpenAI, handling tool calls iteratively until completion.
+   * Processes a conversation with the LLM provider, handling tool calls iteratively until completion.
    *
    * @param {ProcessParams} params - Parameters for processing the conversation
    * @param {ChatCompletionMessageParam[]} params.messages - The conversation history
-   * @returns {Promise<ChatCompletion>} The final response from OpenAI
-   * @throws {Error} If no response is received from OpenAI or max iterations are reached
+   * @returns {Promise<ChatCompletion>} The final response from the LLM
+   * @throws {Error} If no response is received or max iterations are reached
    */
   async process({ messages }: ProcessParams): Promise<ChatCompletion> {
     try {
-      const apiKey = this.options.openaiApiKey || process.env.OPENAI_API_KEY
+      // Ensure we have an API key for the selected provider
+      let apiKey: string | undefined;
+      
+      if (this.llmProvider === 'gemini') {
+        apiKey = this.options.llmApiKey || process.env.GEMINI_API_KEY;
+      } else {
+        apiKey = this.options.llmApiKey || process.env.OPENAI_API_KEY;
+      }
+      
       if (!apiKey) {
         throw new Error(
-          'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
+          `${this.llmProvider.toUpperCase()} API key is required for process(). Please provide it in options or set ${this.llmProvider.toUpperCase()}_API_KEY environment variable.`
         )
       }
 
@@ -605,14 +666,14 @@ export class Agent {
       const MAX_ITERATIONS = 10
 
       while (iterationCount < MAX_ITERATIONS) {
-        completion = await this.openai.chat.completions.create({
-          model: 'gpt-4o',
+        completion = await this.llmClient.chat.completions.create({
+          model: this.llmModel,
           messages: currentMessages,
           tools: this.tools.length ? this.openAiTools : undefined
         })
 
         if (!completion.choices?.length || !completion.choices[0]?.message) {
-          throw new Error('No response from OpenAI')
+          throw new Error(`No response from ${this.llmProvider}`)
         }
 
         const lastMessage = completion.choices[0].message
