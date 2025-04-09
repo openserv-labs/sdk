@@ -63,6 +63,20 @@ const baseHumanAssistanceRequestSchema = z.discriminatedUnion('type', [
   })
 ])
 
+export const mcpServerSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullish(),
+  url: z.string(),
+  tools: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string().nullish(),
+      inputSchema: z.any()
+    })
+  )
+})
+
 export const doTaskActionSchema = z
   .object({
     type: z.literal('do-task'),
@@ -166,6 +180,7 @@ export const doTaskActionSchema = z
         })
       })
     ),
+    mcpServers: z.array(mcpServerSchema),
     memories: z.array(
       z.object({
         id: z.number(),

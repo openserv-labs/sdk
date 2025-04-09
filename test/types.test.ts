@@ -48,7 +48,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      mcpServers: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -111,7 +112,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      mcpServers: []
     }
 
     const respondChatAction = {
@@ -398,7 +400,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      mcpServers: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -548,7 +551,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      mcpServers: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -630,7 +634,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      mcpServers: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -700,7 +705,8 @@ describe('Action Schemas', () => {
           memory: 'test memory',
           createdAt: new Date('2024-01-01')
         }
-      ]
+      ],
+      mcpServers: []
     }
 
     const result = doTaskActionSchema.parse(action)
