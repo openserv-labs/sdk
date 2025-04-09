@@ -1,6 +1,7 @@
 import axios, { type AxiosInstance } from 'axios'
+import bcrypt from 'bcryptjs'
 import compression from 'compression'
-import express from 'express'
+import express, { type Handler } from 'express'
 import type { AsyncRouterInstance } from 'express-async-router'
 import { AsyncRouter } from 'express-async-router'
 import helmet from 'helmet'
@@ -41,6 +42,7 @@ import { Capability } from './capability'
 const PLATFORM_URL = process.env.OPENSERV_API_URL || 'https://api.openserv.ai'
 const RUNTIME_URL = process.env.OPENSERV_RUNTIME_URL || 'https://agents.openserv.ai'
 const DEFAULT_PORT = Number.parseInt(process.env.PORT || '') || 7378
+const AUTH_TOKEN = process.env.OPENSERV_AUTH_TOKEN
 
 /**
  * Configuration options for creating a new Agent instance.
@@ -78,6 +80,24 @@ export interface AgentOptions {
    * @param context - Additional context about where the error occurred
    */
   onError?: (error: Error, context?: Record<string, unknown>) => void
+}
+
+const authTokenMiddleware: Handler = async (req, res, next) => {
+  const tokenHash = req.headers['x-openserv-auth-token']
+
+  if (!tokenHash || typeof tokenHash !== 'string') {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  const isTokenValid = await bcrypt.compare(AUTH_TOKEN as string, tokenHash)
+
+  if (!isTokenValid) {
+    res.status(401).json({ error: 'Unauthorized' })
+    return
+  }
+
+  next()
 }
 
 export class Agent {
@@ -232,6 +252,12 @@ export class Agent {
     this.app.use(hpp())
     this.app.use(helmet())
     this.app.use(compression())
+
+    if (AUTH_TOKEN) {
+      this.app.use(authTokenMiddleware)
+    } else {
+      logger.warn('OPENSERV_AUTH_TOKEN is not set. All requests will be allowed.')
+    }
 
     this.setupRoutes()
   }
