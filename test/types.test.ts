@@ -19,7 +19,8 @@ import {
   RequestHumanAssistanceParams,
   UpdateTaskStatusParams,
   ProcessParams,
-  getFilesParamsSchema
+  getFilesParamsSchema,
+  GetChatMessagesParams
 } from '../src/types'
 
 describe('Action Schemas', () => {
@@ -340,6 +341,16 @@ describe('Action Schemas', () => {
     assert.strictEqual(typeof params.workspaceId, 'number')
     assert.strictEqual(typeof params.agentId, 'number')
     assert.strictEqual(typeof params.message, 'string')
+  })
+
+  test('should validate GetChatMessagesParams', () => {
+    const params: GetChatMessagesParams = {
+      workspaceId: 1,
+      agentId: 2
+    }
+    assert.ok(params)
+    assert.strictEqual(typeof params.workspaceId, 'number')
+    assert.strictEqual(typeof params.agentId, 'number')
   })
 
   test('should validate GetTaskDetailParams', () => {

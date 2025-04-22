@@ -17,7 +17,8 @@ export type {
   RequestHumanAssistanceParams,
   UpdateTaskStatusParams,
   ProcessParams,
-  CapabilityFuncParams
+  CapabilityFuncParams,
+  GetChatMessagesParams
 } from './types'
 
 export {

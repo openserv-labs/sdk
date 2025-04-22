@@ -212,10 +212,29 @@ describe('Agent API Methods', () => {
       systemPrompt: 'You are a test agent'
     })
 
+    const mockChatMessages = {
+      agent: { id: 1, name: 'Calculator Agent' },
+      messages: [
+        {
+          id: 398,
+          author: 'user',
+          message: 'What is the result of 2 + 2?',
+          createdAt: '2025-04-22T12:10:49.595Z'
+        },
+        {
+          id: 399,
+          author: 'agent',
+          message: 'The result is 4',
+          createdAt: '2025-04-22T12:12:27.910Z'
+        }
+      ]
+    }
+
     // Mock the API client
     Object.defineProperty(agent, 'apiClient', {
       value: {
-        post: async () => ({ data: { success: true } })
+        post: async () => ({ data: { success: true } }),
+        get: async () => ({ data: mockChatMessages })
       },
       writable: true
     })
@@ -226,6 +245,12 @@ describe('Agent API Methods', () => {
       message: 'Test message'
     })
     assert.deepStrictEqual(result, { success: true })
+
+    const messages = await agent.getChatMessages({
+      workspaceId: 1,
+      agentId: 1
+    })
+    assert.deepStrictEqual(messages, mockChatMessages)
   })
 
   test('should handle human assistance operations', async () => {
