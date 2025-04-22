@@ -245,6 +245,23 @@ export const actionSchema = z.discriminatedUnion('type', [
   respondChatMessageActionSchema
 ])
 
+const agentChatMessagesResponseSchema = z.object({
+  agent: z.object({
+    id: z.number(),
+    name: z.string()
+  }),
+  messages: z.array(
+    z.object({
+      author: z.enum(['agent', 'user']),
+      createdAt: z.coerce.date(),
+      id: z.number(),
+      message: z.string()
+    })
+  )
+})
+
+export type AgentChatMessagesResponse = z.infer<typeof agentChatMessagesResponseSchema>
+
 export interface GetFilesParams {
   workspaceId: number
 }
