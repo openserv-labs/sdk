@@ -296,6 +296,11 @@ export interface GetAgentsParams {
   workspaceId: number
 }
 
+export interface GetChatMessagesParams {
+  workspaceId: number
+  agentId: number
+}
+
 export interface GetTasksParams {
   workspaceId: number
 }

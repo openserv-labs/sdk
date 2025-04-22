@@ -411,6 +411,12 @@ await agent.sendChatMessage({
   agentId: 456,
   message: 'How can I assist you today?'
 })
+
+// Get agent chat
+await agent.getChatMessages({
+  workspaceId: 123,
+  agentId: 456
+})
 ```
 
 ### File Operations

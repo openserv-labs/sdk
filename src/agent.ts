@@ -24,7 +24,8 @@ import type {
   RequestHumanAssistanceParams,
   UpdateTaskStatusParams,
   ProcessParams,
-  IntegrationCallRequest
+  IntegrationCallRequest,
+  GetChatMessagesParams
 } from './types'
 import type { doTaskActionSchema, respondChatMessageActionSchema } from './types'
 import { actionSchema } from './types'
@@ -501,6 +502,21 @@ export class Agent {
    */
   async getTasks(params: GetTasksParams) {
     const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/tasks`)
+    return response.data
+  }
+
+  /**
+   * Gets a list of tasks in a workspace.
+   *
+   * @param {GetChatMessagesParams} params - Parameters for getting chat messages
+   * @param {number} params.workspaceId - ID of the workspace to get chat messages from
+   * @param {number} params.agentId - ID of the agent to get chat messages from
+   * @returns {Promise<any>} List of chat messages
+   */
+  async getChatMessages(params: GetChatMessagesParams) {
+    const response = await this.apiClient.get(
+      `/workspaces/${params.workspaceId}/agent-chat/${params.agentId}/messages`
+    )
     return response.data
   }
 

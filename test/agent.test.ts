@@ -215,7 +215,8 @@ describe('Agent API Methods', () => {
     // Mock the API client
     Object.defineProperty(agent, 'apiClient', {
       value: {
-        post: async () => ({ data: { success: true } })
+        post: async () => ({ data: { success: true } }),
+        get: async () => ({ data: { messages: [] } })
       },
       writable: true
     })
@@ -226,6 +227,12 @@ describe('Agent API Methods', () => {
       message: 'Test message'
     })
     assert.deepStrictEqual(result, { success: true })
+
+    const messages = await agent.getChatMessages({
+      workspaceId: 1,
+      agentId: 1
+    })
+    assert.deepStrictEqual(messages, { messages: [] })
   })
 
   test('should handle human assistance operations', async () => {

@@ -143,6 +143,27 @@
   {
     "type": "function",
     "function": {
+      "name": "getChatMessages",
+      "description": "Get chat messages",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "number",
+            "description": "The ID of the workspace"
+          },
+          "agentId": {
+            "type": "number",
+            "description": "The ID of the agent"
+          }
+        },
+        "required": ["workspaceId", "agentId"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "getTaskDetail",
       "description": "Get task details",
       "parameters": {
@@ -349,4 +370,4 @@
       }
     }
   }
-] 
+]
