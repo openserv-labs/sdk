@@ -38,9 +38,18 @@ import type {
   ChatCompletion
 } from 'openai/resources/chat/completions'
 import { zodToJsonSchema } from 'zod-to-json-schema'
+import { jsonSchemaToZod } from '@n8n/json-schema-to-zod'
+
 import OpenAI from 'openai'
-import type { z } from 'zod'
+import { z } from 'zod'
 import { Capability } from './capability'
+import {
+  McpError,
+  MCPErrorCodes,
+  type MCPServerConfig,
+  type MCPToolDescriptor,
+  MCPClient
+} from './mcp'
 
 const PLATFORM_URL = process.env.OPENSERV_API_URL || 'https://api.openserv.ai'
 const RUNTIME_URL = process.env.OPENSERV_RUNTIME_URL || 'https://agents.openserv.ai'
@@ -50,7 +59,7 @@ const AUTH_TOKEN = process.env.OPENSERV_AUTH_TOKEN
 /**
  * Configuration options for creating a new Agent instance.
  */
-export interface AgentOptions {
+export interface AgentOptions<T extends string> {
   /**
    * The port number for the agent's HTTP server.
    * Defaults to 7378 if not specified.
@@ -83,6 +92,11 @@ export interface AgentOptions {
    * @param context - Additional context about where the error occurred
    */
   onError?: (error: Error, context?: Record<string, unknown>) => void
+
+  /**
+   * Configuration for MCP servers to connect to
+   */
+  mcpServers?: Record<T, MCPServerConfig>
 }
 
 const authTokenMiddleware: Handler = async (req, res, next) => {
@@ -103,7 +117,7 @@ const authTokenMiddleware: Handler = async (req, res, next) => {
   next()
 }
 
-export class Agent {
+export class Agent<M extends string> {
   /**
    * The Express application instance used to handle HTTP requests.
    * This is initialized in the constructor and used to set up middleware and routes.
@@ -144,7 +158,7 @@ export class Agent {
    * Each capability is an instance of the Capability class with a name, description, schema, and run function.
    * @protected
    */
-  protected tools: Array<Capability<z.ZodTypeAny>> = []
+  protected tools: Array<Capability<M, z.ZodTypeAny>> = []
 
   /**
    * The OpenServ API key used for authentication.
@@ -173,6 +187,12 @@ export class Agent {
    * @protected
    */
   protected _openai?: OpenAI
+
+  /**
+   * Map of MCP clients by server ID.
+   * @private
+   */
+  public mcpClients: Record<M, MCPClient<M>> = {} as Record<M, MCPClient<M>>
 
   /**
    * Getter that converts the agent's tools into OpenAI function calling format.
@@ -219,7 +239,7 @@ export class Agent {
    * @param {AgentOptions} options - Configuration options for the agent
    * @throws {Error} If OpenServ API key is not provided in options or environment
    */
-  constructor(private options: AgentOptions) {
+  constructor(private options: AgentOptions<M>) {
     this.app = express()
     this.router = AsyncRouter()
     this.port = this.options.port || DEFAULT_PORT
@@ -263,6 +283,24 @@ export class Agent {
     }
 
     this.setupRoutes()
+
+    this.initializeMCPClients()
+  }
+
+  private initializeMCPClients() {
+    if (this.options.mcpServers) {
+      for (const serverId in this.options.mcpServers) {
+        const serverConfig = this.options.mcpServers[serverId]
+
+        if (!serverConfig) {
+          logger.warn(`MCP server configuration for serverId "${serverId}" is undefined.`)
+          continue
+        }
+
+        const client = new MCPClient(serverId, serverConfig)
+        this.mcpClients[serverId] = client
+      }
+    }
   }
 
   /**
@@ -292,7 +330,7 @@ export class Agent {
     description: string
     schema: S
     run(
-      this: Agent,
+      this: Agent<M>,
       params: { args: z.infer<S>; action?: z.infer<typeof actionSchema> },
       messages: ChatCompletionMessageParam[]
     ): string | Promise<string>
@@ -303,7 +341,7 @@ export class Agent {
     }
     // Type assertion through unknown for safe conversion between compatible generic types
     this.tools.push(
-      new Capability(name, description, schema, run) as unknown as Capability<z.ZodTypeAny>
+      new Capability(name, description, schema, run) as unknown as Capability<M, z.ZodTypeAny>
     )
     return this
   }
@@ -327,7 +365,7 @@ export class Agent {
       description: string
       schema: T[K]
       run(
-        this: Agent,
+        this: Agent<M>,
         params: { args: z.infer<T[K]>; action?: z.infer<typeof actionSchema> },
         messages: ChatCompletionMessageParam[]
       ): string | Promise<string>
@@ -915,14 +953,49 @@ export class Agent {
    * @returns {Promise<void>} Resolves when the server has started
    * @throws {Error} If server fails to start
    */
-  async start() {
-    return new Promise<void>((resolve, reject) => {
+  async start(): Promise<void> {
+    await new Promise<void>((resolve, reject) => {
       this.server = this.app.listen(this.port, () => {
         logger.info(`Agent server started on port ${this.port}`)
         resolve()
       })
       this.server.on('error', reject)
     })
+
+    const connectionPromises = Object.values<MCPClient<M>>(this.mcpClients).map(client =>
+      client.connect()
+    )
+    const results = await Promise.allSettled(connectionPromises)
+    for (const result of results) {
+      if (result.status === 'rejected') {
+        logger.error({ error: result.reason }, 'Failed to connect MCP client')
+      }
+    }
+
+    try {
+      for (const key in this.mcpClients) {
+        const mcpClient = this.mcpClients[key]
+        const serverId = mcpClient.serverId
+        const serverConfig = this.options.mcpServers?.[serverId]
+
+        if (!serverConfig?.autoRegisterTools) {
+          continue
+        }
+
+        const tools = mcpClient.getTools()
+        if (tools.length === 0) {
+          logger.info(
+            `MCP server "${serverId}" connected, but no tools found/returned to auto-register.`
+          )
+          continue
+        }
+
+        this.addMCPToolsAsCapabilities(serverId, tools)
+        logger.info(`Auto-registered ${tools.length} tools for MCP server "${serverId}".`)
+      }
+    } catch (mcpError) {
+      logger.error({ error: mcpError }, 'Error during MCP tools registration')
+    }
   }
 
   /**
@@ -971,9 +1044,57 @@ export class Agent {
 
     return response.data
   }
+
+  /**
+   * Registers a list of MCP tool descriptors as capabilities on the agent.
+   * Each tool is wrapped in a function that calls `executeMCPTool`.
+   * The capability name is prefixed with `mcp_<serverId>_`.
+   *
+   * @param serverId - The ID of the MCP server these tools belong to.
+   * @param tools - An array of {@link MCPToolDescriptor} objects to register.
+   * @private
+   */
+  private addMCPToolsAsCapabilities(serverId: M, tools: MCPToolDescriptor[]): void {
+    for (const tool of tools) {
+      const capabilityName = `mcp_${serverId}_${tool.name}`
+      const inputSchema = tool.inputSchema ?? { type: 'object', properties: {} }
+
+      // Register the capability
+      this.addCapability({
+        name: capabilityName,
+        description: tool.description || `Tool from MCP server ${serverId}`,
+        schema: jsonSchemaToZod(inputSchema),
+        async run({ args }) {
+          const mcpClient = this.mcpClients[serverId]
+          if (!mcpClient) {
+            throw new McpError(
+              MCPErrorCodes.INVALID_PARAMS,
+              `Attempted to run tool for unknown MCP serverId: ${serverId}`
+            )
+          }
+          try {
+            const result = await mcpClient.executeTool(tool.name, args)
+
+            // Extract content based on result format
+            if (result && typeof result === 'object' && 'content' in result) {
+              const content = result.content
+              return typeof content === 'string' ? content : JSON.stringify(content)
+            }
+            return JSON.stringify(result)
+          } catch (callError) {
+            logger.error(`Error calling MCP tool "${capabilityName}":`, callError)
+            throw new McpError(
+              MCPErrorCodes.INTERNAL_ERROR,
+              `Failed to execute MCP tool ${tool.name}: ${callError instanceof Error ? callError.message : String(callError)}`
+            )
+          }
+        }
+      })
+    }
+  }
 }
 
-function convertToolToJsonSchema(tool: Capability<z.ZodTypeAny>) {
+function convertToolToJsonSchema<M extends string>(tool: Capability<M, z.ZodTypeAny>) {
   return {
     name: tool.name,
     description: tool.description,
