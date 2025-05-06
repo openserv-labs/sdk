@@ -460,6 +460,30 @@ describe('Agent File Operations', () => {
     assert.deepStrictEqual(uploadResult, { fileId: 'test-file-id' })
   })
 
+  test('should handle file deletion', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    // Mock the API client
+    Object.defineProperty(agent, 'apiClient', {
+      value: {
+        delete: async (url: string) => {
+          assert.deepStrictEqual(url, '/workspaces/1/files/123')
+          return { data: { message: 'File deleted successfully' } }
+        }
+      },
+      writable: true
+    })
+
+    const deleteResult = await agent.deleteFile({
+      workspaceId: 1,
+      fileId: 123
+    })
+    assert.deepStrictEqual(deleteResult, { message: 'File deleted successfully' })
+  })
+
   test('should get secrets collection', async () => {
     const agent = new Agent({
       apiKey: mockApiKey,

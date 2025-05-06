@@ -6,6 +6,7 @@ export type {
   TaskStatus,
   GetFilesParams,
   UploadFileParams,
+  DeleteFileParams,
   MarkTaskAsErroredParams,
   CompleteTaskParams,
   SendChatMessageParams,

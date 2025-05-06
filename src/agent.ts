@@ -13,6 +13,7 @@ import type {
   GetSecretsParams,
   GetSecretValueParams,
   UploadFileParams,
+  DeleteFileParams,
   MarkTaskAsErroredParams,
   CompleteTaskParams,
   SendChatMessageParams,
@@ -407,6 +408,21 @@ export class Agent {
         'Content-Type': 'multipart/form-data'
       }
     })
+    return response.data
+  }
+
+  /**
+   * Deletes a file from a workspace.
+   *
+   * @param {DeleteFileParams} params - Parameters for the file deletion
+   * @param {number} params.workspaceId - ID of the workspace containing the file
+   * @param {number} params.fileId - ID of the file to delete
+   * @returns {Promise<any>} A success message confirming the file was deleted
+   */
+  async deleteFile(params: DeleteFileParams): Promise<any> {
+    const response = await this.apiClient.delete(
+      `/workspaces/${params.workspaceId}/files/${params.fileId}`
+    )
     return response.data
   }
 

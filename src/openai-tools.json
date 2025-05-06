@@ -72,6 +72,27 @@
   {
     "type": "function",
     "function": {
+      "name": "deleteFile",
+      "description": "Delete a file from workspace",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "workspaceId": {
+            "type": "number",
+            "description": "The ID of the workspace"
+          },
+          "fileId": {
+            "type": "number",
+            "description": "The ID of the file to delete"
+          }
+        },
+        "required": ["workspaceId", "fileId"]
+      }
+    }
+  },
+  {
+    "type": "function",
+    "function": {
       "name": "markTaskAsErrored",
       "description": "Mark a task as errored",
       "parameters": {
