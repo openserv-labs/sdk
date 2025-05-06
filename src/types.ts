@@ -286,6 +286,11 @@ export interface UploadFileParams {
   file: Buffer | string
 }
 
+export interface DeleteFileParams {
+  workspaceId: number
+  fileId: number
+}
+
 export interface MarkTaskAsErroredParams {
   workspaceId: number
   taskId: number
