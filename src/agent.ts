@@ -659,6 +659,14 @@ export class Agent {
       }
 
       const currentMessages = [...messages]
+
+      if (!currentMessages.find(m => m.content === this.systemPrompt)) {
+        currentMessages.unshift({
+          role: 'system',
+          content: this.systemPrompt
+        })
+      }
+
       let completion: ChatCompletion | null = null
       let iterationCount = 0
       const MAX_ITERATIONS = 10

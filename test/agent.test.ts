@@ -3,6 +3,7 @@ import { Agent } from '../src'
 import { z } from 'zod'
 import assert from 'node:assert'
 import { BadRequest as BadRequestError } from 'http-errors'
+import type { ChatCompletionMessageParam } from 'openai/resources/index.mjs'
 
 const mockApiKey = 'test-key'
 
@@ -142,6 +143,334 @@ describe('Agent', () => {
     })
 
     assert.ok(response.choices[0].message)
+  })
+
+  test('should add system prompt when not present in messages', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    let capturedMessages: any[] = []
+    // Mock the OpenAI client to capture messages
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async ({ messages }: { messages: any[] }) => {
+              capturedMessages = messages
+              return {
+                choices: [
+                  {
+                    message: {
+                      role: 'assistant',
+                      content: 'Response',
+                      tool_calls: undefined
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      writable: true
+    })
+
+    await agent.process({
+      messages: [{ role: 'user', content: 'Hello' }]
+    })
+
+    // Verify system prompt was added at the beginning
+    assert.strictEqual(capturedMessages.length, 2)
+    assert.strictEqual(capturedMessages[0].role, 'system')
+    assert.strictEqual(capturedMessages[0].content, 'You are a helpful assistant')
+    assert.strictEqual(capturedMessages[1].role, 'user')
+    assert.strictEqual(capturedMessages[1].content, 'Hello')
+  })
+
+  test('should not duplicate system prompt when already present', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    let capturedMessages: any[] = []
+    // Mock the OpenAI client to capture messages
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async ({ messages }: { messages: any[] }) => {
+              capturedMessages = messages
+              return {
+                choices: [
+                  {
+                    message: {
+                      role: 'assistant',
+                      content: 'Response',
+                      tool_calls: undefined
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      writable: true
+    })
+
+    await agent.process({
+      messages: [
+        { role: 'system', content: 'You are a helpful assistant' },
+        { role: 'user', content: 'Hello' }
+      ]
+    })
+
+    // Verify system prompt was not duplicated
+    assert.strictEqual(capturedMessages.length, 2)
+    assert.strictEqual(capturedMessages[0].role, 'system')
+    assert.strictEqual(capturedMessages[0].content, 'You are a helpful assistant')
+    assert.strictEqual(capturedMessages[1].role, 'user')
+    assert.strictEqual(capturedMessages[1].content, 'Hello')
+
+    // Ensure there's only one system message with the prompt
+    const systemMessages = capturedMessages.filter(
+      m => m.role === 'system' && m.content === 'You are a helpful assistant'
+    )
+    assert.strictEqual(systemMessages.length, 1)
+  })
+
+  test('should add system prompt when different system message exists', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    let capturedMessages: any[] = []
+    // Mock the OpenAI client to capture messages
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async ({ messages }: { messages: any[] }) => {
+              capturedMessages = messages
+              return {
+                choices: [
+                  {
+                    message: {
+                      role: 'assistant',
+                      content: 'Response',
+                      tool_calls: undefined
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      writable: true
+    })
+
+    await agent.process({
+      messages: [
+        { role: 'system', content: 'Different system message' },
+        { role: 'user', content: 'Hello' }
+      ]
+    })
+
+    // Verify system prompt was added because content was different
+    assert.strictEqual(capturedMessages.length, 3)
+    assert.strictEqual(capturedMessages[0].role, 'system')
+    assert.strictEqual(capturedMessages[0].content, 'You are a helpful assistant')
+    assert.strictEqual(capturedMessages[1].role, 'system')
+    assert.strictEqual(capturedMessages[1].content, 'Different system message')
+    assert.strictEqual(capturedMessages[2].role, 'user')
+    assert.strictEqual(capturedMessages[2].content, 'Hello')
+  })
+
+  test('should handle empty messages array', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    let capturedMessages: any[] = []
+    // Mock the OpenAI client to capture messages
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async ({ messages }: { messages: any[] }) => {
+              capturedMessages = messages
+              return {
+                choices: [
+                  {
+                    message: {
+                      role: 'assistant',
+                      content: 'Response',
+                      tool_calls: undefined
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      writable: true
+    })
+
+    await agent.process({
+      messages: []
+    })
+
+    // Verify system prompt was added to empty array
+    assert.strictEqual(capturedMessages.length, 1)
+    assert.strictEqual(capturedMessages[0].role, 'system')
+    assert.strictEqual(capturedMessages[0].content, 'You are a helpful assistant')
+  })
+
+  test('should preserve original messages array', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    // Mock the OpenAI client
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async () => ({
+              choices: [
+                {
+                  message: {
+                    role: 'assistant',
+                    content: 'Response',
+                    tool_calls: undefined
+                  }
+                }
+              ]
+            })
+          }
+        }
+      },
+      writable: true
+    })
+
+    const originalMessages: ChatCompletionMessageParam[] = [{ role: 'user', content: 'Hello' }]
+    const messagesCopy = [...originalMessages]
+
+    await agent.process({
+      messages: originalMessages
+    })
+
+    // Verify original array was not modified
+    assert.deepStrictEqual(originalMessages, messagesCopy)
+    assert.strictEqual(originalMessages.length, 1)
+  })
+
+  test('should handle messages with complex content', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    let capturedMessages: any[] = []
+    // Mock the OpenAI client to capture messages
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async ({ messages }: { messages: any[] }) => {
+              capturedMessages = messages
+              return {
+                choices: [
+                  {
+                    message: {
+                      role: 'assistant',
+                      content: 'Response',
+                      tool_calls: undefined
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      writable: true
+    })
+
+    await agent.process({
+      messages: [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there!' },
+        { role: 'user', content: 'How are you?' }
+      ]
+    })
+
+    // Verify system prompt was added at the beginning
+    assert.strictEqual(capturedMessages.length, 4)
+    assert.strictEqual(capturedMessages[0].role, 'system')
+    assert.strictEqual(capturedMessages[0].content, 'You are a helpful assistant')
+  })
+
+  test('should handle system prompt in middle of conversation', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a helpful assistant',
+      openaiApiKey: 'test-key'
+    })
+
+    let capturedMessages: any[] = []
+    // Mock the OpenAI client to capture messages
+    Object.defineProperty(agent, '_openai', {
+      value: {
+        chat: {
+          completions: {
+            create: async ({ messages }: { messages: any[] }) => {
+              capturedMessages = messages
+              return {
+                choices: [
+                  {
+                    message: {
+                      role: 'assistant',
+                      content: 'Response',
+                      tool_calls: undefined
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      },
+      writable: true
+    })
+
+    await agent.process({
+      messages: [
+        { role: 'user', content: 'Hello' },
+        { role: 'system', content: 'You are a helpful assistant' },
+        { role: 'user', content: 'How are you?' }
+      ]
+    })
+
+    // Verify system prompt was not added because it already exists
+    assert.strictEqual(capturedMessages.length, 3)
+    // System prompt should remain in its original position
+    assert.strictEqual(capturedMessages[1].role, 'system')
+    assert.strictEqual(capturedMessages[1].content, 'You are a helpful assistant')
   })
 })
 
