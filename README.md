@@ -304,7 +304,9 @@ agent.addCapability({
     const summary = `Summary of text (${text.length} chars): ...`
 
     // Log progress to the task
-    await action.task.addLog({
+    await this.addLogToTask({
+      workspaceId: action.workspace.id,
+      taskId: action.task.id,
       severity: 'info',
       type: 'text',
       body: 'Generated summary successfully'
