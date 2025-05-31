@@ -8,7 +8,7 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
 
 ## Table of Contents
 
-- [OpenServ Autonomous AI Agent Development Framework](#openserv-autonomous-ai-agent-development-framework)
+- [OpenServ TypeScript SDK, Autonomous AI Agent Development Framework](#openserv-typescript-sdk-autonomous-ai-agent-development-framework)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Framework Architecture](#framework-architecture)
