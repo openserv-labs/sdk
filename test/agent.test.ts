@@ -1505,3 +1505,370 @@ describe('Agent Integration Operations', () => {
     }
   })
 })
+
+describe('Agent MCP Integration', () => {
+  interface MockMCPClient {
+    serverId: string
+    connect: () => Promise<void>
+    getTools: () => Array<{
+      name: string
+      description?: string
+      inputSchema?: Record<string, unknown>
+    }>
+    executeTool: (toolName: string, params: any) => Promise<any>
+  }
+
+  test('should initialize multiple MCP clients with different transport types', () => {
+    const mcpServers = {
+      'stdio-server': {
+        transport: 'stdio' as const,
+        command: 'python',
+        args: ['-m', 'test_server'],
+        autoRegisterTools: true
+      },
+      'sse-server': {
+        transport: 'sse' as const,
+        url: 'http://mock-openserv-mcp-server.local/api',
+        autoRegisterTools: false
+      },
+      'http-server': {
+        transport: 'http' as const,
+        url: 'http://mock-openserv-mcp-server.local/api',
+        autoRegisterTools: true
+      }
+    }
+
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      mcpServers
+    })
+
+    assert.strictEqual(Object.keys(agent.mcpClients).length, 3)
+    assert.ok(agent.mcpClients['stdio-server'])
+    assert.ok(agent.mcpClients['sse-server'])
+    assert.ok(agent.mcpClients['http-server'])
+    assert.strictEqual(agent.mcpClients['stdio-server'].serverId, 'stdio-server')
+    assert.strictEqual(agent.mcpClients['sse-server'].serverId, 'sse-server')
+    assert.strictEqual(agent.mcpClients['http-server'].serverId, 'http-server')
+  })
+
+  test('should handle MCP server configuration validation errors with onError callback', () => {
+    let handledError: Error | undefined
+    let handledContext: Record<string, unknown> | undefined
+
+    const invalidMcpServers = {
+      'invalid-server': {
+        transport: 'stdio' as const,
+        command: '', // Invalid empty command
+        args: []
+      }
+    }
+
+    assert.throws(() => {
+      new Agent({
+        apiKey: mockApiKey,
+        systemPrompt: 'You are a test agent',
+        mcpServers: invalidMcpServers,
+        onError: (error, context) => {
+          handledError = error
+          handledContext = context
+        }
+      })
+    })
+
+    assert.strictEqual(typeof handledError, 'undefined')
+    assert.strictEqual(typeof handledContext, 'undefined')
+  })
+
+  test('should handle empty MCP server configuration', () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      mcpServers: {}
+    })
+
+    assert.strictEqual(Object.keys(agent.mcpClients).length, 0)
+  })
+
+  test('should not auto-register tools when autoRegisterTools is false', async () => {
+    const mcpServers = {
+      'no-auto-server': {
+        transport: 'stdio' as const,
+        command: 'python',
+        args: ['-m', 'server'],
+        autoRegisterTools: false
+      }
+    }
+
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      mcpServers
+    })
+
+    const mockTools = [
+      {
+        name: 'some_tool',
+        description: 'Some tool',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            input: { type: 'string' }
+          }
+        }
+      }
+    ]
+
+    const mockMcpClient: MockMCPClient = {
+      serverId: 'no-auto-server',
+      connect: async () => {},
+      getTools: () => mockTools,
+      executeTool: async () => {
+        return { content: 'Should not be called' }
+      }
+    }
+
+    agent.mcpClients['no-auto-server'] = mockMcpClient as any
+    const mockServer = {
+      on: () => {},
+      close: (callback: () => void) => callback()
+    }
+
+    Object.defineProperty(agent, 'app', {
+      value: {
+        listen: (port: number, callback: () => void) => {
+          callback()
+          return mockServer
+        }
+      },
+      writable: true
+    })
+
+    await agent.start()
+
+    const openAiTools = (agent as any).openAiTools
+    const mcpToolNames = openAiTools
+      .map((tool: any) => tool.function.name)
+      .filter((name: string) => name.startsWith('mcp_no-auto-server_'))
+
+    assert.strictEqual(mcpToolNames.length, 0)
+
+    await agent.stop()
+  })
+
+  test('should execute MCP tool with action context', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    const mockTools = [
+      {
+        name: 'context_tool',
+        description: 'A tool that uses action context',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            message: { type: 'string' }
+          },
+          required: ['message']
+        }
+      }
+    ]
+
+    let toolExecuted = false
+    let executedParams: any = null
+
+    const mockMcpClient: MockMCPClient = {
+      serverId: 'context-server',
+      connect: async () => {},
+      getTools: () => mockTools,
+      executeTool: async (toolName: string, params: any) => {
+        toolExecuted = true
+        executedParams = params
+        return { content: `Tool executed with message: ${params.message}` }
+      }
+    }
+
+    agent.mcpClients['context-server'] = mockMcpClient as any
+    ;(agent as any).addMCPToolsAsCapabilities('context-server', mockTools)
+
+    const result = await agent.handleToolRoute({
+      params: { toolName: 'mcp_context-server_context_tool' },
+      body: {
+        args: { message: 'Hello from context' },
+        action: undefined // Action context can be undefined
+      }
+    })
+
+    assert.strictEqual(toolExecuted, true)
+    assert.deepStrictEqual(executedParams, { message: 'Hello from context' })
+    assert.strictEqual(result.result, 'Tool executed with message: Hello from context')
+  })
+
+  test('should handle multiple MCP servers with conflicting tool names', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    const mockTools = [
+      {
+        name: 'shared_tool',
+        description: 'A tool shared across servers',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            input: { type: 'string' }
+          }
+        }
+      }
+    ]
+
+    const mockMcpClient1: MockMCPClient = {
+      serverId: 'server-1',
+      connect: async () => {},
+      getTools: () => mockTools,
+      executeTool: async (toolName: string, params: any) => {
+        return { content: `Server 1: ${params.input}` }
+      }
+    }
+
+    const mockMcpClient2: MockMCPClient = {
+      serverId: 'server-2',
+      connect: async () => {},
+      getTools: () => mockTools,
+      executeTool: async (toolName: string, params: any) => {
+        return { content: `Server 2: ${params.input}` }
+      }
+    }
+
+    agent.mcpClients['server-1'] = mockMcpClient1 as any
+    agent.mcpClients['server-2'] = mockMcpClient2 as any
+    ;(agent as any).addMCPToolsAsCapabilities('server-1', mockTools)
+    ;(agent as any).addMCPToolsAsCapabilities('server-2', mockTools)
+
+    const result1 = await agent.handleToolRoute({
+      params: { toolName: 'mcp_server-1_shared_tool' },
+      body: { args: { input: 'test1' } }
+    })
+
+    const result2 = await agent.handleToolRoute({
+      params: { toolName: 'mcp_server-2_shared_tool' },
+      body: { args: { input: 'test2' } }
+    })
+
+    assert.strictEqual(result1.result, 'Server 1: test1')
+    assert.strictEqual(result2.result, 'Server 2: test2')
+  })
+
+  test('should handle MCP tool execution errors with onError callback', async () => {
+    let handledError: Error | undefined
+    let handledContext: Record<string, unknown> | undefined
+
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent',
+      onError: (error, context) => {
+        handledError = error
+        handledContext = context
+      }
+    })
+
+    const mockTools = [
+      {
+        name: 'failing_tool',
+        description: 'A tool that fails',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            input: { type: 'string' }
+          }
+        }
+      }
+    ]
+
+    const mockMcpClient: MockMCPClient = {
+      serverId: 'error-server',
+      connect: async () => {},
+      getTools: () => mockTools,
+      executeTool: async () => {
+        throw new Error('Tool execution failed')
+      }
+    }
+
+    agent.mcpClients['error-server'] = mockMcpClient as any
+    ;(agent as any).addMCPToolsAsCapabilities('error-server', mockTools)
+
+    try {
+      await agent.handleToolRoute({
+        params: { toolName: 'mcp_error-server_failing_tool' },
+        body: {
+          args: { input: 'test' }
+        }
+      })
+      assert.fail('Expected error to be thrown')
+    } catch (error) {
+      assert.ok(error instanceof Error)
+      assert.ok(error.message.includes('Failed to execute MCP tool'))
+      assert.ok(handledError)
+      assert.strictEqual(handledContext?.context, 'handle_tool_route')
+    }
+  })
+
+  test('should handle MCP tool schema validation errors', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    const mockTools = [
+      {
+        name: 'strict_tool',
+        description: 'A tool with strict validation',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            required_field: { type: 'string' },
+            number_field: { type: 'number' }
+          },
+          required: ['required_field']
+        }
+      }
+    ]
+
+    const mockMcpClient: MockMCPClient = {
+      serverId: 'validation-server',
+      connect: async () => {},
+      getTools: () => mockTools,
+      executeTool: async () => {
+        return { content: 'Success' }
+      }
+    }
+
+    agent.mcpClients['validation-server'] = mockMcpClient as any
+    ;(agent as any).addMCPToolsAsCapabilities('validation-server', mockTools)
+
+    try {
+      await agent.handleToolRoute({
+        params: { toolName: 'mcp_validation-server_strict_tool' },
+        body: {
+          args: { number_field: 42 }
+        }
+      })
+      assert.fail('Expected validation error to be thrown')
+    } catch (error) {
+      assert.ok(error instanceof Error)
+    }
+
+    const result = await agent.handleToolRoute({
+      params: { toolName: 'mcp_validation-server_strict_tool' },
+      body: {
+        args: { required_field: 'test', number_field: 42 }
+      }
+    })
+
+    assert.strictEqual(result.result, 'Success')
+  })
+})
