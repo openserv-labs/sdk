@@ -41,6 +41,7 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
       - [Upload File](#upload-file)
     - [Integration Management](#integration-management)
       - [Call Integration](#call-integration)
+    - [MCP](#mcp)
   - [Advanced Usage](#advanced-usage)
     - [OpenAI Process Runtime](#openai-process-runtime)
     - [Error Handling](#error-handling)
@@ -572,6 +573,63 @@ const response = await agent.callIntegration({
   }
 })
 ```
+
+### MCP
+
+Easily connect your agent to external [Model Context Protocol](https://modelcontextprotocol.org) (MCP) servers and automatically import their tools as capabilities.
+
+#### Configure MCP servers
+
+Provide an `mcpServers` object when creating the agent. Each key is a **server ID** of your choice. Supported transports are `http`, `sse`, and `stdio`.
+
+```typescript
+import { Agent } from '@openserv-labs/sdk'
+
+const agent = new Agent({
+  systemPrompt: 'You are a search-engine assistant.',
+  mcpServers: {
+    Exa: {
+      transport: 'http',
+      url: 'https://server.smithery.ai/exa/mcp?api_key=YOUR_API_KEY',
+      autoRegisterTools: true // automatically turn MCP tools into capabilities
+    }
+  }
+})
+
+await agent.start()
+```
+
+##### Local (stdio) transport
+
+```typescript
+mcpServers: {
+  LocalLLM: {
+    transport: 'stdio',
+    command: 'my-mcp-binary',
+    args: ['--model', 'gpt-4o'],
+    env: { OPENAI_API_KEY: process.env.OPENAI_API_KEY },
+    autoRegisterTools: true
+  }
+}
+```
+
+##### Server-Sent Events (sse) transport
+
+```typescript
+mcpServers: {
+  Anthropic: {
+    transport: 'sse',
+    url: 'https://my-mcp-server.com/sse',
+    autoRegisterTools: false
+  }
+}
+```
+
+#### Using MCP tools
+
+If `autoRegisterTools` is `true`, each MCP tool becomes a capability named `mcp_<serverId>_<toolName>`.
+
+You can also access the raw MCP client via `agent.mcpClients['MCP_SERVER_ID']` to list tools (`getTools`) or execute them directly (`executeTool`) inside your agents own capabilities.
 
 ## Advanced Usage
 
