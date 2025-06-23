@@ -151,6 +151,7 @@ export const doTaskActionSchema = z
         })
       )
     }),
+    workspaceExecutionId: z.number().optional(),
     integrations: z.array(
       z.object({
         id: z.number(),
@@ -179,6 +180,7 @@ export const doTaskActionSchema = z
 export const respondChatMessageActionSchema = z
   .object({
     type: z.literal('respond-chat-message'),
+    workspaceExecutionId: z.number().optional(),
     me: z.intersection(
       z.object({
         id: z.number(),
