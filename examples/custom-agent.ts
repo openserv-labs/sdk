@@ -10,7 +10,8 @@ export class SophisticatedChatAgent extends Agent {
     this.sendChatMessage({
       workspaceId: action.workspace.id,
       agentId: action.me.id,
-      message: 'This is a custom message'
+      message: 'This is a custom message',
+      workspaceUpdateToken: action.workspaceUpdateToken
     })
   }
 }

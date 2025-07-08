@@ -49,7 +49,11 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: [],
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -80,7 +84,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      workspaceUpdateToken: '123'
     }
 
     const result = respondChatMessageActionSchema.parse(action)
@@ -112,7 +117,11 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: [],
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
 
     const respondChatAction = {
@@ -138,7 +147,8 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      workspaceUpdateToken: '123'
     }
 
     const doTaskResult = actionSchema.parse(doTaskAction)
@@ -205,7 +215,8 @@ describe('Action Schemas', () => {
       path: 'test.txt',
       file: 'test content',
       taskIds: [1, 2, 3],
-      skipSummarizer: true
+      skipSummarizer: true,
+      workspaceUpdateToken: '123'
     }
     assert.ok(params1)
 
@@ -214,7 +225,8 @@ describe('Action Schemas', () => {
       workspaceId: 1,
       path: 'test.txt',
       file: 'test content',
-      taskIds: 1
+      taskIds: 1,
+      workspaceUpdateToken: '123'
     }
     assert.ok(params2)
 
@@ -223,7 +235,8 @@ describe('Action Schemas', () => {
       workspaceId: 1,
       path: 'test.txt',
       file: 'test content',
-      taskIds: null
+      taskIds: null,
+      workspaceUpdateToken: '123'
     }
     assert.ok(params3)
 
@@ -232,7 +245,8 @@ describe('Action Schemas', () => {
       workspaceId: 1,
       path: 'test.txt',
       file: 'test content',
-      skipSummarizer: false
+      skipSummarizer: false,
+      workspaceUpdateToken: '123'
     }
     assert.ok(params4)
 
@@ -240,7 +254,8 @@ describe('Action Schemas', () => {
     const params5: UploadFileParams = {
       workspaceId: 1,
       path: 'test.txt',
-      file: Buffer.from('test content')
+      file: Buffer.from('test content'),
+      workspaceUpdateToken: '123'
     }
     assert.ok(params5)
 
@@ -248,7 +263,8 @@ describe('Action Schemas', () => {
     const params6: UploadFileParams = {
       workspaceId: 1,
       path: 'test.txt',
-      file: 'test content'
+      file: 'test content',
+      workspaceUpdateToken: '123'
     }
     assert.ok(params6)
   })
@@ -256,7 +272,8 @@ describe('Action Schemas', () => {
   test('should validate GetFilesParams', () => {
     // Test valid case
     const params: GetFilesParams = {
-      workspaceId: 1
+      workspaceId: 1,
+      workspaceUpdateToken: '123'
     }
     const result = getFilesParamsSchema.parse(params)
     assert.deepStrictEqual(result, params)
@@ -311,7 +328,9 @@ describe('Action Schemas', () => {
     const params: MarkTaskAsErroredParams = {
       workspaceId: 1,
       taskId: 2,
-      error: 'Test error message'
+      error: 'Test error message',
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
     assert.ok(params)
     assert.strictEqual(typeof params.workspaceId, 'number')
@@ -323,7 +342,9 @@ describe('Action Schemas', () => {
     const params: CompleteTaskParams = {
       workspaceId: 1,
       taskId: 2,
-      output: 'Test task output'
+      output: 'Test task output',
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
     assert.ok(params)
     assert.strictEqual(typeof params.workspaceId, 'number')
@@ -335,7 +356,8 @@ describe('Action Schemas', () => {
     const params: SendChatMessageParams = {
       workspaceId: 1,
       agentId: 2,
-      message: 'Test chat message'
+      message: 'Test chat message',
+      workspaceUpdateToken: '123'
     }
     assert.ok(params)
     assert.strictEqual(typeof params.workspaceId, 'number')
@@ -356,7 +378,8 @@ describe('Action Schemas', () => {
   test('should validate GetTaskDetailParams', () => {
     const params: GetTaskDetailParams = {
       workspaceId: 1,
-      taskId: 2
+      taskId: 2,
+      workspaceUpdateToken: '123'
     }
     assert.ok(params)
     assert.strictEqual(typeof params.workspaceId, 'number')
@@ -409,7 +432,11 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: [],
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -426,7 +453,8 @@ describe('Action Schemas', () => {
 
   test('should validate GetTasksParams', () => {
     const params: GetTasksParams = {
-      workspaceId: 1
+      workspaceId: 1,
+      workspaceUpdateToken: '123'
     }
     assert.ok(params)
     assert.strictEqual(typeof params.workspaceId, 'number')
@@ -456,6 +484,8 @@ describe('Action Schemas', () => {
     const textParams: AddLogToTaskParams = {
       workspaceId: 1,
       taskId: 2,
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123',
       severity: 'info',
       type: 'text',
       body: 'Test log message'
@@ -465,6 +495,8 @@ describe('Action Schemas', () => {
     const openaiParams: AddLogToTaskParams = {
       workspaceId: 1,
       taskId: 2,
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123',
       severity: 'warning',
       type: 'openai-message',
       body: { role: 'assistant', content: 'Test message' }
@@ -480,7 +512,9 @@ describe('Action Schemas', () => {
       question: {
         type: 'text',
         question: 'Test question'
-      }
+      },
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
     assert.ok(textParams)
 
@@ -489,7 +523,9 @@ describe('Action Schemas', () => {
       taskId: 2,
       type: 'project-manager-plan-review',
       question: { type: 'project-manager-plan-review', tasks: [] },
-      agentDump: { data: 'Test data' }
+      agentDump: { data: 'Test data' },
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
     assert.ok(reviewParams)
   })
@@ -498,7 +534,8 @@ describe('Action Schemas', () => {
     const params: UpdateTaskStatusParams = {
       workspaceId: 1,
       taskId: 2,
-      status: 'in-progress'
+      status: 'in-progress',
+      workspaceUpdateToken: '123'
     }
     assert.ok(params)
     assert.strictEqual(typeof params.workspaceId, 'number')
@@ -559,7 +596,11 @@ describe('Action Schemas', () => {
         agents: []
       },
       integrations: [],
-      memories: []
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: [],
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -640,8 +681,12 @@ describe('Action Schemas', () => {
         bucket_folder: 'test-folder',
         agents: []
       },
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123',
       integrations: [],
-      memories: []
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -678,6 +723,8 @@ describe('Action Schemas', () => {
           }
         ]
       },
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123',
       integrations: [
         {
           id: 3,
@@ -711,7 +758,9 @@ describe('Action Schemas', () => {
           memory: 'test memory',
           createdAt: new Date('2024-01-01')
         }
-      ]
+      ],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -742,6 +791,7 @@ describe('Action Schemas', () => {
           message: 'test response'
         }
       ],
+      workspaceUpdateToken: '123',
       workspace: {
         id: 1,
         goal: 'test goal',

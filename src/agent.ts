@@ -255,19 +255,13 @@ export class Agent<M extends string> {
     // Initialize API client
     this.apiClient = axios.create({
       baseURL: PLATFORM_URL,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-openserv-key': this.apiKey
-      }
+      headers: { 'Content-Type': 'application/json', 'x-openserv-key': this.apiKey }
     })
 
     // Initialize runtime client
     this.runtimeClient = axios.create({
       baseURL: `${RUNTIME_URL}/runtime`,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-openserv-key': this.apiKey
-      }
+      headers: { 'Content-Type': 'application/json', 'x-openserv-key': this.apiKey }
     })
 
     this.app.use(express.json())
@@ -382,10 +376,15 @@ export class Agent<M extends string> {
    *
    * @param {GetFilesParams} params - Parameters for the file retrieval
    * @param {number} params.workspaceId - ID of the workspace to get files from
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} The files in the workspace
    */
   async getFiles(params: GetFilesParams) {
-    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/files`)
+    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/files`, {
+      params: {
+        workspaceUpdateToken: params.workspaceUpdateToken
+      }
+    })
     return response.data
   }
 
@@ -422,6 +421,7 @@ export class Agent<M extends string> {
    * @param {number[]|number|null} [params.taskIds] - Optional task IDs to associate with the file
    * @param {boolean} [params.skipSummarizer] - Whether to skip file summarization
    * @param {Buffer|string} params.file - The file content to upload
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} The uploaded file details
    */
   async uploadFile(params: UploadFileParams) {
@@ -442,8 +442,9 @@ export class Agent<M extends string> {
     formData.append('file', fileBlob)
 
     const response = await this.apiClient.post(`/workspaces/${params.workspaceId}/file`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
+      headers: { 'Content-Type': 'multipart/form-data' },
+      params: {
+        workspaceUpdateToken: params.workspaceUpdateToken
       }
     })
     return response.data
@@ -455,11 +456,17 @@ export class Agent<M extends string> {
    * @param {DeleteFileParams} params - Parameters for the file deletion
    * @param {number} params.workspaceId - ID of the workspace containing the file
    * @param {number} params.fileId - ID of the file to delete
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} A success message confirming the file was deleted
    */
   async deleteFile(params: DeleteFileParams): Promise<any> {
     const response = await this.apiClient.delete(
-      `/workspaces/${params.workspaceId}/files/${params.fileId}`
+      `/workspaces/${params.workspaceId}/files/${params.fileId}`,
+      {
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken
+        }
+      }
     )
     return response.data
   }
@@ -471,13 +478,20 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to mark as errored
    * @param {string} params.error - Error message describing what went wrong
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
+   * @param {string} params.taskUpdateToken - Token for the task update
    * @returns {Promise<any>} The updated task details
    */
   async markTaskAsErrored(params: MarkTaskAsErroredParams) {
+    console.log('ddd being called', params)
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/error`,
+      { error: params.error },
       {
-        error: params.error
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken,
+          taskUpdateToken: params.taskUpdateToken
+        }
       }
     )
     return response.data
@@ -490,13 +504,19 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to complete
    * @param {string} params.output - Output or result of the completed task
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
+   * @param {string} params.taskUpdateToken - Token for the task update
    * @returns {Promise<any>} The completed task details
    */
   async completeTask(params: CompleteTaskParams) {
     const response = await this.apiClient.put(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/complete`,
+      { output: params.output },
       {
-        output: params.output
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken,
+          taskUpdateToken: params.taskUpdateToken
+        }
       }
     )
     return response.data
@@ -509,13 +529,18 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace where the chat is happening
    * @param {number} params.agentId - ID of the agent sending the message
    * @param {string} params.message - Content of the message to send
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} The sent message details
    */
   async sendChatMessage(params: SendChatMessageParams) {
+    console.log('ddd sendChatMessage being called', params)
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/agent-chat/${params.agentId}/message`,
+      { message: params.message },
       {
-        message: params.message
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken
+        }
       }
     )
     return response.data
@@ -527,11 +552,17 @@ export class Agent<M extends string> {
    * @param {GetTaskDetailParams} params - Parameters for getting task details
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to get details for
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} The detailed task information
    */
   async getTaskDetail(params: GetTaskDetailParams) {
     const response = await this.apiClient.get(
-      `/workspaces/${params.workspaceId}/tasks/${params.taskId}/detail`
+      `/workspaces/${params.workspaceId}/tasks/${params.taskId}/detail`,
+      {
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken
+        }
+      }
     )
     return response.data
   }
@@ -553,15 +584,20 @@ export class Agent<M extends string> {
    *
    * @param {GetTasksParams} params - Parameters for getting tasks
    * @param {number} params.workspaceId - ID of the workspace to get tasks from
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} List of tasks in the workspace
    */
   async getTasks(params: GetTasksParams) {
-    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/tasks`)
+    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/tasks`, {
+      params: {
+        workspaceUpdateToken: params.workspaceUpdateToken
+      }
+    })
     return response.data
   }
 
   /**
-   * Gets a list of tasks in a workspace.
+   * Gets a list of agent chat messages.
    *
    * @param {GetChatMessagesParams} params - Parameters for getting chat messages
    * @param {number} params.workspaceId - ID of the workspace to get chat messages from
@@ -606,6 +642,8 @@ export class Agent<M extends string> {
    * @param {AddLogToTaskParams} params - Parameters for adding the log
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to add the log to
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
+   * @param {string} params.taskUpdateToken - Token for the task update
    * @param {'info'|'warning'|'error'} params.severity - Severity level of the log
    * @param {'text'|'openai-message'} params.type - Type of log entry
    * @param {string|object} params.body - Content of the log entry
@@ -614,10 +652,12 @@ export class Agent<M extends string> {
   async addLogToTask(params: AddLogToTaskParams) {
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/log`,
+      { severity: params.severity, type: params.type, body: params.body },
       {
-        severity: params.severity,
-        type: params.type,
-        body: params.body
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken,
+          taskUpdateToken: params.taskUpdateToken
+        }
       }
     )
     return response.data
@@ -632,29 +672,27 @@ export class Agent<M extends string> {
    * @param {'text'|'project-manager-plan-review'} params.type - Type of assistance needed
    * @param {string|object} params.question - Question or request for the human
    * @param {object} [params.agentDump] - Optional agent state/context information
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
+   * @param {string} params.taskUpdateToken - Token for the task update
    * @returns {Promise<any>} The created assistance request details
    */
   async requestHumanAssistance(params: RequestHumanAssistanceParams) {
     let question = params.question
 
     if (typeof question === 'string') {
-      question = {
-        type: 'text',
-        question
-      }
+      question = { type: 'text', question }
     } else {
-      question = {
-        type: 'json',
-        ...question
-      }
+      question = { type: 'json', ...question }
     }
 
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/human-assistance`,
+      { type: params.type, question, agentDump: params.agentDump },
       {
-        type: params.type,
-        question,
-        agentDump: params.agentDump
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken,
+          taskUpdateToken: params.taskUpdateToken
+        }
       }
     )
     return response.data
@@ -667,13 +705,17 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to update
    * @param {TaskStatus} params.status - New status for the task
+   * @param {string} params.workspaceUpdateToken - Token for the workspace update
    * @returns {Promise<any>} The updated task details
    */
   async updateTaskStatus(params: UpdateTaskStatusParams) {
     const response = await this.apiClient.put(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/status`,
+      { status: params.status },
       {
-        status: params.status
+        params: {
+          workspaceUpdateToken: params.workspaceUpdateToken
+        }
       }
     )
     return response.data
@@ -699,10 +741,7 @@ export class Agent<M extends string> {
       const currentMessages = [...messages]
 
       if (!currentMessages.find(m => m.content === this.systemPrompt)) {
-        currentMessages.unshift({
-          role: 'system',
-          content: this.systemPrompt
-        })
+        currentMessages.unshift({ role: 'system', content: this.systemPrompt })
       }
 
       let completion: ChatCompletion | null = null
@@ -785,21 +824,14 @@ export class Agent<M extends string> {
    * @protected
    */
   protected async doTask(action: z.infer<typeof doTaskActionSchema>) {
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: this.systemPrompt
-      }
-    ]
+    const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: this.systemPrompt }]
 
     if (action.task?.description) {
-      messages.push({
-        role: 'user',
-        content: action.task.description
-      })
+      messages.push({ role: 'user', content: action.task.description })
     }
 
     try {
+      console.log('ddd calling execute')
       await this.runtimeClient.post('/execute', {
         tools: this.tools.map(convertToolToJsonSchema),
         messages,
@@ -819,19 +851,11 @@ export class Agent<M extends string> {
    * @protected
    */
   protected async respondToChat(action: z.infer<typeof respondChatMessageActionSchema>) {
-    const messages: ChatCompletionMessageParam[] = [
-      {
-        role: 'system',
-        content: this.systemPrompt
-      }
-    ]
+    const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: this.systemPrompt }]
 
     if (action.messages) {
       for (const msg of action.messages) {
-        messages.push({
-          role: msg.author === 'user' ? 'user' : 'assistant',
-          content: msg.message
-        })
+        messages.push({ role: msg.author === 'user' ? 'user' : 'assistant', content: msg.message })
       }
     }
 
@@ -938,10 +962,7 @@ export class Agent<M extends string> {
       if (!toolName) {
         throw new BadRequest('Tool name is required')
       }
-      return this.handleToolRoute({
-        params: { toolName },
-        body: req.body
-      })
+      return this.handleToolRoute({ params: { toolName }, body: req.body })
     })
 
     this.app.use('/', this.router)
@@ -1039,7 +1060,12 @@ export class Agent<M extends string> {
   async callIntegration(integration: IntegrationCallRequest) {
     const response = await this.apiClient.post(
       `/workspaces/${integration.workspaceId}/integration/${integration.integrationId}/proxy`,
-      integration.details
+      integration.details,
+      {
+        params: {
+          workspaceUpdateToken: integration.workspaceUpdateToken
+        }
+      }
     )
 
     return response.data
@@ -1095,9 +1121,5 @@ export class Agent<M extends string> {
 }
 
 function convertToolToJsonSchema<M extends string>(tool: Capability<M, z.ZodTypeAny>) {
-  return {
-    name: tool.name,
-    description: tool.description,
-    schema: zodToJsonSchema(tool.schema)
-  }
+  return { name: tool.name, description: tool.description, schema: zodToJsonSchema(tool.schema) }
 }

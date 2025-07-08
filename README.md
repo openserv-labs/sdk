@@ -308,6 +308,8 @@ agent.addCapability({
     await this.addLogToTask({
       workspaceId: action.workspace.id,
       taskId: action.task.id,
+      workspaceUpdateToken: action.workspaceUpdateToken,
+      taskUpdateToken: action.taskUpdateToken,
       severity: 'info',
       type: 'text',
       body: 'Generated summary successfully'
@@ -372,6 +374,8 @@ const task = await agent.createTask({
 await agent.addLogToTask({
   workspaceId: 123,
   taskId: task.id,
+  workspaceUpdateToken: '6e995730-57f3-4b6',
+  taskUpdateToken: '48ghehjkgb-frf43-vdf',
   severity: 'info',
   type: 'text',
   body: 'Starting analysis...'
@@ -381,7 +385,8 @@ await agent.addLogToTask({
 await agent.updateTaskStatus({
   workspaceId: 123,
   taskId: task.id,
-  status: 'in-progress'
+  status: 'in-progress',
+  workspaceUpdateToken: '6e995730-57f3-4b6'
 })
 ```
 
@@ -412,6 +417,7 @@ const customerSupportAgent = new Agent({
 await agent.sendChatMessage({
   workspaceId: 123,
   agentId: 456,
+  workspaceUpdateToken: '6e995730-57f3-4b6',
   message: 'How can I assist you today?'
 })
 
@@ -433,12 +439,14 @@ await agent.uploadFile({
   path: 'reports/analysis.txt',
   file: 'Analysis results...',
   skipSummarizer: false,
+  workspaceUpdateToken: '6e995730-57f3-4b6',
   taskIds: [456] // Associate with tasks
 })
 
 // Get workspace files
 const files = await agent.getFiles({
-  workspaceId: 123
+  workspaceId: 123,
+  workspaceUpdateToken: 'abcd'
 })
 ```
 
@@ -466,7 +474,8 @@ const task = await agent.createTask({
 await agent.updateTaskStatus({
   workspaceId: number,
   taskId: number,
-  status: 'to-do' | 'in-progress' | 'human-assistance-required' | 'error' | 'done' | 'cancelled'
+  status: 'to-do' | 'in-progress' | 'human-assistance-required' | 'error' | 'done' | 'cancelled',
+  workspaceUpdateToken: string
 })
 ```
 
@@ -476,6 +485,8 @@ await agent.updateTaskStatus({
 await agent.addLogToTask({
   workspaceId: number,
   taskId: number,
+  workspaceUpdateToken: string,
+  taskUpdateToken: string,
   severity: 'info' | 'warning' | 'error',
   type: 'text' | 'openai-message',
   body: string | object
@@ -490,7 +501,8 @@ await agent.addLogToTask({
 await agent.sendChatMessage({
   workspaceId: number,
   agentId: number,
-  message: string
+  message: string,
+  workspaceUpdateToken: string
 })
 ```
 
@@ -502,7 +514,9 @@ await agent.requestHumanAssistance({
   taskId: number,
   type: 'text' | 'project-manager-plan-review',
   question: string | object,
-  agentDump?: object
+  agentDump?: object,
+  workspaceUpdateToken: string,
+  taskUpdateToken: string
 })
 ```
 
@@ -512,7 +526,8 @@ await agent.requestHumanAssistance({
 
 ```typescript
 const files = await agent.getFiles({
-  workspaceId: number
+  workspaceId: number,
+  workspaceUpdateToken: string
 })
 ```
 
@@ -522,6 +537,7 @@ const files = await agent.getFiles({
 await agent.uploadFile({
   workspaceId: number,
   path: string,
+  workspaceUpdateToken: string,
   file: Buffer | string,
   skipSummarizer?: boolean,
   taskIds?: number[]
@@ -536,6 +552,7 @@ await agent.uploadFile({
 const response = await agent.callIntegration({
   workspaceId: number,
   integrationId: string,
+  workspaceUpdateToken: string,
   details: {
     endpoint: string,
     method: string,
@@ -564,6 +581,7 @@ Allows agents to interact with external services and APIs that are integrated wi
 const response = await agent.callIntegration({
   workspaceId: 123,
   integrationId: 'twitter-v2',
+  workspaceUpdateToken: '6e995730-57f3-4b6',
   details: {
     endpoint: '/2/tweets',
     method: 'POST',
@@ -663,6 +681,8 @@ try {
   await agent.markTaskAsErrored({
     workspaceId: action.workspace.id,
     taskId: action.task.id,
+    workspaceUpdateToken: action.workspaceUpdateToken,
+    taskUpdateToken: action.taskUpdateToken,
     error: error instanceof Error ? error.message : 'Unknown error'
   })
 
@@ -670,6 +690,8 @@ try {
   await agent.addLogToTask({
     workspaceId: action.workspace.id,
     taskId: action.task.id,
+    workspaceUpdateToken: action.workspaceUpdateToken,
+    taskUpdateToken: action.taskUpdateToken,
     severity: 'error',
     type: 'text',
     body: `Error: ${error.message}`
@@ -690,7 +712,8 @@ class DataAnalysisAgent extends Agent {
       await this.updateTaskStatus({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
-        status: 'in-progress'
+        status: 'in-progress',
+        workspaceUpdateToken: action.workspaceUpdateToken
       })
 
       // Implement custom analysis logic
@@ -699,6 +722,8 @@ class DataAnalysisAgent extends Agent {
       await this.completeTask({
         workspaceId: action.workspace.id,
         taskId: action.task.id,
+        workspaceUpdateToken: action.workspaceUpdateToken,
+        taskUpdateToken: action.taskUpdateToken,
         output: JSON.stringify(result)
       })
     } catch (error) {

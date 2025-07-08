@@ -27,9 +27,13 @@
           "workspaceId": {
             "type": "number",
             "description": "The ID of the workspace"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId"]
+        "required": ["workspaceId", "workspaceUpdateToken"]
       }
     }
   },
@@ -63,9 +67,13 @@
           "file": {
             "type": "string",
             "description": "The file content as a string"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId", "path", "file"]
+        "required": ["workspaceId", "path", "file", "workspaceUpdateToken"]
       }
     }
   },
@@ -84,9 +92,13 @@
           "fileId": {
             "type": "number",
             "description": "The ID of the file to delete"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId", "fileId"]
+        "required": ["workspaceId", "fileId", "workspaceUpdateToken"]
       }
     }
   },
@@ -106,12 +118,20 @@
             "type": "number",
             "description": "The ID of the task"
           },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
+          },
+          "taskUpdateToken": {
+            "type": "string",
+            "description": "The token for the task update"
+          },
           "error": {
             "type": "string",
             "description": "The error message"
           }
         },
-        "required": ["workspaceId", "taskId", "error"]
+        "required": ["workspaceId", "taskId", "workspaceUpdateToken", "taskUpdateToken", "error"]
       }
     }
   },
@@ -134,9 +154,17 @@
           "output": {
             "type": "string",
             "description": "The task output"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
+          },
+          "taskUpdateToken": {
+            "type": "string",
+            "description": "The token for the task update"
           }
         },
-        "required": ["workspaceId", "taskId", "output"]
+        "required": ["workspaceId", "taskId", "output", "workspaceUpdateToken", "taskUpdateToken"]
       }
     }
   },
@@ -155,9 +183,13 @@
           "message": {
             "type": "string",
             "description": "The chat message"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId", "message"]
+        "required": ["workspaceId", "message", "workspaceUpdateToken"]
       }
     }
   },
@@ -197,9 +229,13 @@
           "taskId": {
             "type": "number",
             "description": "The ID of the task"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId", "taskId"]
+        "required": ["workspaceId", "taskId", "workspaceUpdateToken"]
       }
     }
   },
@@ -231,9 +267,13 @@
           "workspaceId": {
             "type": "number",
             "description": "The ID of the workspace"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId"]
+        "required": ["workspaceId", "workspaceUpdateToken"]
       }
     }
   },
@@ -305,6 +345,14 @@
             "type": "number",
             "description": "The ID of the task"
           },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
+          },
+          "taskUpdateToken": {
+            "type": "string",
+            "description": "The token for the task update"
+          },
           "severity": {
             "type": "string",
             "enum": ["info", "warning", "error"],
@@ -320,7 +368,15 @@
             "description": "Log body"
           }
         },
-        "required": ["workspaceId", "taskId", "severity", "type", "body"]
+        "required": [
+          "workspaceId",
+          "taskId",
+          "workspaceUpdateToken",
+          "taskUpdateToken",
+          "severity",
+          "type",
+          "body"
+        ]
       }
     }
   },
@@ -352,9 +408,24 @@
           "agentDump": {
             "type": "object",
             "description": "Optional agent state dump"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
+          },
+          "taskUpdateToken": {
+            "type": "string",
+            "description": "The token for the task update"
           }
         },
-        "required": ["workspaceId", "taskId", "type", "question"]
+        "required": [
+          "workspaceId",
+          "taskId",
+          "type",
+          "question",
+          "workspaceUpdateToken",
+          "taskUpdateToken"
+        ]
       }
     }
   },
@@ -385,9 +456,13 @@
               "cancelled"
             ],
             "description": "The new task status"
+          },
+          "workspaceUpdateToken": {
+            "type": "string",
+            "description": "The token for the workspace update"
           }
         },
-        "required": ["workspaceId", "taskId", "status"]
+        "required": ["workspaceId", "taskId", "status", "workspaceUpdateToken"]
       }
     }
   }
