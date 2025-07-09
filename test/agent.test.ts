@@ -490,13 +490,14 @@ describe('Agent API Methods', () => {
       writable: true
     })
 
-    const files = await agent.getFiles({ workspaceId: 1 })
+    const files = await agent.getFiles({ workspaceId: 1, workspaceUpdateToken: '123' })
     assert.deepStrictEqual(files, { files: [] })
 
     const uploadResult = await agent.uploadFile({
       workspaceId: 1,
       path: 'test.txt',
-      file: 'test content'
+      file: 'test content',
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(uploadResult, { fileId: 'test-file-id' })
   })
@@ -520,18 +521,22 @@ describe('Agent API Methods', () => {
     const markErrored = await agent.markTaskAsErrored({
       workspaceId: 1,
       taskId: 1,
-      error: 'Test error'
+      error: 'Test error',
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     })
     assert.deepStrictEqual(markErrored, { success: true })
 
     const complete = await agent.completeTask({
       workspaceId: 1,
       taskId: 1,
-      output: 'Test result'
+      output: 'Test result',
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     })
     assert.deepStrictEqual(complete, { success: true })
 
-    const tasks = await agent.getTasks({ workspaceId: 1 })
+    const tasks = await agent.getTasks({ workspaceId: 1, workspaceUpdateToken: '123' })
     assert.deepStrictEqual(tasks, { tasks: [] })
   })
 
@@ -571,7 +576,8 @@ describe('Agent API Methods', () => {
     const result = await agent.sendChatMessage({
       workspaceId: 1,
       agentId: 1,
-      message: 'Test message'
+      message: 'Test message',
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(result, { success: true })
 
@@ -600,7 +606,9 @@ describe('Agent API Methods', () => {
       workspaceId: 1,
       taskId: 1,
       type: 'text',
-      question: 'Need help'
+      question: 'Need help',
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123'
     })
     assert.deepStrictEqual(result, { success: true })
   })
@@ -759,7 +767,8 @@ describe('Agent File Operations', () => {
       path: 'test.txt',
       file: Buffer.from('test content'),
       taskIds: [1, 2],
-      skipSummarizer: true
+      skipSummarizer: true,
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(uploadResult, { fileId: 'test-file-id' })
   })
@@ -784,7 +793,8 @@ describe('Agent File Operations', () => {
     const uploadResult = await agent.uploadFile({
       workspaceId: 1,
       path: 'test.txt',
-      file: 'test content'
+      file: 'test content',
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(uploadResult, { fileId: 'test-file-id' })
   })
@@ -808,7 +818,8 @@ describe('Agent File Operations', () => {
 
     const deleteResult = await agent.deleteFile({
       workspaceId: 1,
-      fileId: 123
+      fileId: 123,
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(deleteResult, { message: 'File deleted successfully' })
   })
@@ -887,7 +898,8 @@ describe('Agent Task Operations', () => {
 
     const taskDetail = await agent.getTaskDetail({
       workspaceId: 1,
-      taskId: 1
+      taskId: 1,
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(taskDetail, mockTaskDetail)
   })
@@ -1000,6 +1012,8 @@ describe('Agent Task Management', () => {
 
     const log = await agent.addLogToTask({
       workspaceId: 1,
+      workspaceUpdateToken: '123',
+      taskUpdateToken: '123',
       taskId: 1,
       severity: 'info',
       type: 'text',
@@ -1032,7 +1046,8 @@ describe('Agent Task Management', () => {
     const response = await agent.updateTaskStatus({
       workspaceId: 1,
       taskId: 1,
-      status: 'in-progress'
+      status: 'in-progress',
+      workspaceUpdateToken: '123'
     })
     assert.deepStrictEqual(response, { success: true })
   })
@@ -1418,6 +1433,7 @@ describe('Agent Integration Operations', () => {
 
     const response = await agent.callIntegration({
       workspaceId: 1,
+      workspaceUpdateToken: '123',
       integrationId: 'test-integration',
       details: {
         endpoint: '/test',
@@ -1462,6 +1478,7 @@ describe('Agent Integration Operations', () => {
 
     const response = await agent.callIntegration({
       workspaceId: 1,
+      workspaceUpdateToken: '123',
       integrationId: 'test-integration',
       details: {
         endpoint: '/test',
@@ -1493,6 +1510,7 @@ describe('Agent Integration Operations', () => {
     try {
       await agent.callIntegration({
         workspaceId: 1,
+        workspaceUpdateToken: '123',
         integrationId: 'test-integration',
         details: {
           endpoint: '/test',

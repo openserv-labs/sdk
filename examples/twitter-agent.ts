@@ -25,6 +25,7 @@ marketingManager
       async run({ action }) {
         const details = await this.callIntegration({
           workspaceId: action!.workspace.id,
+          workspaceUpdateToken: action!.workspaceUpdateToken,
           integrationId: 'twitter-v2',
           details: {
             endpoint: '/2/users/me',
@@ -44,6 +45,7 @@ marketingManager
       async run({ args, action }) {
         const response = await this.callIntegration({
           workspaceId: action!.workspace.id,
+          workspaceUpdateToken: action!.workspaceUpdateToken,
           integrationId: 'twitter-v2',
           details: {
             endpoint: '/2/tweets',
