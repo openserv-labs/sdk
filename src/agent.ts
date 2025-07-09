@@ -483,7 +483,6 @@ export class Agent<M extends string> {
    * @returns {Promise<any>} The updated task details
    */
   async markTaskAsErrored(params: MarkTaskAsErroredParams) {
-    console.log('ddd being called', params)
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/error`,
       { error: params.error },
@@ -533,7 +532,6 @@ export class Agent<M extends string> {
    * @returns {Promise<any>} The sent message details
    */
   async sendChatMessage(params: SendChatMessageParams) {
-    console.log('ddd sendChatMessage being called', params)
     const response = await this.apiClient.post(
       `/workspaces/${params.workspaceId}/agent-chat/${params.agentId}/message`,
       { message: params.message },
@@ -831,7 +829,6 @@ export class Agent<M extends string> {
     }
 
     try {
-      console.log('ddd calling execute')
       await this.runtimeClient.post('/execute', {
         tools: this.tools.map(convertToolToJsonSchema),
         messages,
