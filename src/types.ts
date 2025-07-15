@@ -268,13 +268,29 @@ export interface GetFilesParams {
   workspaceId: number
 }
 
+export type GetFilesResponse = {
+  id: number
+  path: string
+  fullUrl: string
+  summary: string
+  size: number
+}[]
+
 export interface GetSecretsParams {
   workspaceId: number
 }
+
+export type GetSecretsResponse = {
+  id: number
+  name: string
+}[]
+
 export interface GetSecretValueParams {
   workspaceId: number
   secretId: number
 }
+
+export type GetSecretValueResponse = string
 
 export const getFilesParamsSchema = z.object({
   workspaceId: z.number().int().positive()
@@ -288,9 +304,19 @@ export interface UploadFileParams {
   file: Buffer | string
 }
 
+export type UploadFileResponse = {
+  fileId: number
+  fullUrl: string
+  summary?: string
+}
+
 export interface DeleteFileParams {
   workspaceId: number
   fileId: number
+}
+
+export type DeleteFileResponse = {
+  message: string
 }
 
 export interface MarkTaskAsErroredParams {
@@ -299,11 +325,15 @@ export interface MarkTaskAsErroredParams {
   error: string
 }
 
+export type MarkTaskAsErroredResponse = undefined
+
 export interface CompleteTaskParams {
   workspaceId: number
   taskId: number
   output: string
 }
+
+export type CompleteTaskResponse = undefined
 
 export interface SendChatMessageParams {
   workspaceId: number
@@ -311,14 +341,42 @@ export interface SendChatMessageParams {
   message: string
 }
 
+export type SendChatMessageResponse = undefined
+
 export interface GetTaskDetailParams {
   workspaceId: number
   taskId: number
 }
 
+export type GetTaskDetailResponse = {
+  assigneeAgentId: number
+  assigneeAgentName: string
+  id: number
+  body?: string | null
+  description: string
+  input?: string | null
+  expectedOutput?: string | null
+  output?: string | null
+  reporterAgentId: number
+  reporterAgentName: string
+  status: TaskStatus
+  attachments: {
+    id: number
+    path: string
+    fullUrl: string
+    summary?: string | null
+  }[]
+}
+
 export interface GetAgentsParams {
   workspaceId: number
 }
+
+export type GetAgentsResponse = {
+  id: number
+  name: string
+  capabilitiesDescription: string
+}[]
 
 export interface GetChatMessagesParams {
   workspaceId: number
@@ -328,6 +386,17 @@ export interface GetChatMessagesParams {
 export interface GetTasksParams {
   workspaceId: number
 }
+
+export type GetTasksResponse = {
+  id: number
+  description: string
+  status: TaskStatus
+  output?: string | null
+  assigneeAgentId: number
+  assigneeAgentName: string
+  dependencies: { dependency_task_id: number }[]
+  triggerDependencies: { dependency_trigger_id: string }[]
+}[]
 
 export interface CreateTaskParams {
   workspaceId: number
@@ -339,6 +408,10 @@ export interface CreateTaskParams {
   dependencies: number[]
 }
 
+export type CreateTaskResponse = {
+  id: number
+}
+
 export interface AddLogToTaskParams {
   workspaceId: number
   taskId: number
@@ -346,6 +419,8 @@ export interface AddLogToTaskParams {
   type: 'text' | 'openai-message'
   body: string | object
 }
+
+export type AddLogToTaskResponse = undefined
 
 export interface RequestHumanAssistanceParams {
   workspaceId: number
@@ -355,11 +430,15 @@ export interface RequestHumanAssistanceParams {
   agentDump?: object
 }
 
+export type RequestHumanAssistanceResponse = undefined
+
 export interface UpdateTaskStatusParams {
   workspaceId: number
   taskId: number
   status: TaskStatus
 }
+
+export type UpdateTaskStatusResponse = undefined
 
 export interface ProcessParams {
   messages: ChatCompletionMessageParam[]

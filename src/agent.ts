@@ -27,7 +27,22 @@ import type {
   ProcessParams,
   IntegrationCallRequest,
   GetChatMessagesParams,
-  AgentChatMessagesResponse
+  AgentChatMessagesResponse,
+  GetFilesResponse,
+  GetSecretValueResponse,
+  GetSecretsResponse,
+  UploadFileResponse,
+  DeleteFileResponse,
+  GetTaskDetailResponse,
+  GetAgentsResponse,
+  GetTasksResponse,
+  CreateTaskResponse,
+  AddLogToTaskResponse,
+  RequestHumanAssistanceResponse,
+  UpdateTaskStatusResponse,
+  MarkTaskAsErroredResponse,
+  CompleteTaskResponse,
+  SendChatMessageResponse
 } from './types'
 import type { doTaskActionSchema, respondChatMessageActionSchema } from './types'
 import { actionSchema } from './types'
@@ -41,7 +56,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import { jsonSchemaToZod } from '@n8n/json-schema-to-zod'
 
 import OpenAI from 'openai'
-import { z } from 'zod'
+import type { z } from 'zod'
 import { Capability } from './capability'
 import {
   McpError,
@@ -382,10 +397,12 @@ export class Agent<M extends string> {
    *
    * @param {GetFilesParams} params - Parameters for the file retrieval
    * @param {number} params.workspaceId - ID of the workspace to get files from
-   * @returns {Promise<any>} The files in the workspace
+   * @returns {Promise<GetFilesResponse>} The files in the workspace
    */
   async getFiles(params: GetFilesParams) {
-    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/files`)
+    const response = await this.apiClient.get<GetFilesResponse>(
+      `/workspaces/${params.workspaceId}/files`
+    )
     return response.data
   }
 
@@ -393,10 +410,12 @@ export class Agent<M extends string> {
    * Get all secrets for an agent in a workspace.
    *
    * @param {GetSecretsParams} params - Parameters for the secrets retrieval
-   * @returns {Promise<any>} List of agent secrets.
+   * @returns {Promise<GetSecretsResponse>} List of agent secrets.
    */
   async getSecrets(params: GetSecretsParams) {
-    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/agent-secrets`)
+    const response = await this.apiClient.get<GetSecretsResponse>(
+      `/workspaces/${params.workspaceId}/agent-secrets`
+    )
     return response.data
   }
 
@@ -404,10 +423,10 @@ export class Agent<M extends string> {
    * Get the value of a secret for an agent in a workspace
    *
    * @param {GetSecretValueParams} params - Parameters for the secret value retrieval
-   * @returns {Promise<string>} The value of the secret.
+   * @returns {Promise<GetSecretValueResponse>} The value of the secret.
    */
-  async getSecretValue(params: GetSecretValueParams): Promise<string> {
-    const response = await this.apiClient.get(
+  async getSecretValue(params: GetSecretValueParams) {
+    const response = await this.apiClient.get<GetSecretValueResponse>(
       `/workspaces/${params.workspaceId}/agent-secrets/${params.secretId}/value`
     )
     return response.data
@@ -422,7 +441,7 @@ export class Agent<M extends string> {
    * @param {number[]|number|null} [params.taskIds] - Optional task IDs to associate with the file
    * @param {boolean} [params.skipSummarizer] - Whether to skip file summarization
    * @param {Buffer|string} params.file - The file content to upload
-   * @returns {Promise<any>} The uploaded file details
+   * @returns {Promise<UploadFileResponse>} The uploaded file details
    */
   async uploadFile(params: UploadFileParams) {
     const formData = new FormData()
@@ -441,11 +460,15 @@ export class Agent<M extends string> {
         : new Blob([params.file], { type: 'text/plain' })
     formData.append('file', fileBlob)
 
-    const response = await this.apiClient.post(`/workspaces/${params.workspaceId}/file`, formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data'
+    const response = await this.apiClient.post<UploadFileResponse>(
+      `/workspaces/${params.workspaceId}/file`,
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data'
+        }
       }
-    })
+    )
     return response.data
   }
 
@@ -455,10 +478,10 @@ export class Agent<M extends string> {
    * @param {DeleteFileParams} params - Parameters for the file deletion
    * @param {number} params.workspaceId - ID of the workspace containing the file
    * @param {number} params.fileId - ID of the file to delete
-   * @returns {Promise<any>} A success message confirming the file was deleted
+   * @returns {Promise<DeleteFileResponse>} A success message confirming the file was deleted
    */
-  async deleteFile(params: DeleteFileParams): Promise<any> {
-    const response = await this.apiClient.delete(
+  async deleteFile(params: DeleteFileParams) {
+    const response = await this.apiClient.delete<DeleteFileResponse>(
       `/workspaces/${params.workspaceId}/files/${params.fileId}`
     )
     return response.data
@@ -471,10 +494,10 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to mark as errored
    * @param {string} params.error - Error message describing what went wrong
-   * @returns {Promise<any>} The updated task details
+   * @returns {Promise<MarkTaskAsErroredResponse>} The updated task details
    */
   async markTaskAsErrored(params: MarkTaskAsErroredParams) {
-    const response = await this.apiClient.post(
+    const response = await this.apiClient.post<MarkTaskAsErroredResponse>(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/error`,
       {
         error: params.error
@@ -490,10 +513,10 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to complete
    * @param {string} params.output - Output or result of the completed task
-   * @returns {Promise<any>} The completed task details
+   * @returns {Promise<CompleteTaskResponse>} The completed task details
    */
   async completeTask(params: CompleteTaskParams) {
-    const response = await this.apiClient.put(
+    const response = await this.apiClient.put<CompleteTaskResponse>(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/complete`,
       {
         output: params.output
@@ -509,10 +532,10 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace where the chat is happening
    * @param {number} params.agentId - ID of the agent sending the message
    * @param {string} params.message - Content of the message to send
-   * @returns {Promise<any>} The sent message details
+   * @returns {Promise<SendChatMessageResponse>} The sent message details
    */
   async sendChatMessage(params: SendChatMessageParams) {
-    const response = await this.apiClient.post(
+    const response = await this.apiClient.post<SendChatMessageResponse>(
       `/workspaces/${params.workspaceId}/agent-chat/${params.agentId}/message`,
       {
         message: params.message
@@ -527,10 +550,10 @@ export class Agent<M extends string> {
    * @param {GetTaskDetailParams} params - Parameters for getting task details
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to get details for
-   * @returns {Promise<any>} The detailed task information
+   * @returns {Promise<GetTaskDetailResponse>} The detailed task information
    */
   async getTaskDetail(params: GetTaskDetailParams) {
-    const response = await this.apiClient.get(
+    const response = await this.apiClient.get<GetTaskDetailResponse>(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/detail`
     )
     return response.data
@@ -541,10 +564,12 @@ export class Agent<M extends string> {
    *
    * @param {GetAgentsParams} params - Parameters for getting agents
    * @param {number} params.workspaceId - ID of the workspace to get agents from
-   * @returns {Promise<any>} List of agents in the workspace
+   * @returns {Promise<GetAgentsResponse>} List of agents in the workspace
    */
   async getAgents(params: GetAgentsParams) {
-    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/agents`)
+    const response = await this.apiClient.get<GetAgentsResponse>(
+      `/workspaces/${params.workspaceId}/agents`
+    )
     return response.data
   }
 
@@ -553,10 +578,12 @@ export class Agent<M extends string> {
    *
    * @param {GetTasksParams} params - Parameters for getting tasks
    * @param {number} params.workspaceId - ID of the workspace to get tasks from
-   * @returns {Promise<any>} List of tasks in the workspace
+   * @returns {Promise<GetTasksResponse>} List of tasks in the workspace
    */
   async getTasks(params: GetTasksParams) {
-    const response = await this.apiClient.get(`/workspaces/${params.workspaceId}/tasks`)
+    const response = await this.apiClient.get<GetTasksResponse>(
+      `/workspaces/${params.workspaceId}/tasks`
+    )
     return response.data
   }
 
@@ -569,10 +596,10 @@ export class Agent<M extends string> {
    * @returns {Promise<AgentChatMessagesResponse>} List of chat messages
    */
   async getChatMessages(params: GetChatMessagesParams) {
-    const response = await this.apiClient.get(
+    const response = await this.apiClient.get<AgentChatMessagesResponse>(
       `/workspaces/${params.workspaceId}/agent-chat/${params.agentId}/messages`
     )
-    return response.data as AgentChatMessagesResponse
+    return response.data
   }
 
   /**
@@ -586,17 +613,20 @@ export class Agent<M extends string> {
    * @param {string} params.input - Input data for the task
    * @param {string} params.expectedOutput - Expected output format or content
    * @param {number[]} params.dependencies - IDs of tasks that this task depends on
-   * @returns {Promise<any>} The created task details
+   * @returns {Promise<CreateTaskResponse>} The created task details
    */
   async createTask(params: CreateTaskParams) {
-    const response = await this.apiClient.post(`/workspaces/${params.workspaceId}/task`, {
-      assignee: params.assignee,
-      description: params.description,
-      body: params.body,
-      input: params.input,
-      expectedOutput: params.expectedOutput,
-      dependencies: params.dependencies
-    })
+    const response = await this.apiClient.post<CreateTaskResponse>(
+      `/workspaces/${params.workspaceId}/task`,
+      {
+        assignee: params.assignee,
+        description: params.description,
+        body: params.body,
+        input: params.input,
+        expectedOutput: params.expectedOutput,
+        dependencies: params.dependencies
+      }
+    )
     return response.data
   }
 
@@ -609,10 +639,10 @@ export class Agent<M extends string> {
    * @param {'info'|'warning'|'error'} params.severity - Severity level of the log
    * @param {'text'|'openai-message'} params.type - Type of log entry
    * @param {string|object} params.body - Content of the log entry
-   * @returns {Promise<any>} The created log entry details
+   * @returns {Promise<AddLogToTaskResponse>} The created log entry details
    */
   async addLogToTask(params: AddLogToTaskParams) {
-    const response = await this.apiClient.post(
+    const response = await this.apiClient.post<AddLogToTaskResponse>(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/log`,
       {
         severity: params.severity,
@@ -632,7 +662,7 @@ export class Agent<M extends string> {
    * @param {'text'|'project-manager-plan-review'} params.type - Type of assistance needed
    * @param {string|object} params.question - Question or request for the human
    * @param {object} [params.agentDump] - Optional agent state/context information
-   * @returns {Promise<any>} The created assistance request details
+   * @returns {Promise<RequestHumanAssistanceResponse>} The created assistance request details
    */
   async requestHumanAssistance(params: RequestHumanAssistanceParams) {
     let question = params.question
@@ -649,7 +679,7 @@ export class Agent<M extends string> {
       }
     }
 
-    const response = await this.apiClient.post(
+    const response = await this.apiClient.post<RequestHumanAssistanceResponse>(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/human-assistance`,
       {
         type: params.type,
@@ -667,10 +697,10 @@ export class Agent<M extends string> {
    * @param {number} params.workspaceId - ID of the workspace containing the task
    * @param {number} params.taskId - ID of the task to update
    * @param {TaskStatus} params.status - New status for the task
-   * @returns {Promise<any>} The updated task details
+   * @returns {Promise<UpdateTaskStatusResponse>} The updated task details
    */
   async updateTaskStatus(params: UpdateTaskStatusParams) {
-    const response = await this.apiClient.put(
+    const response = await this.apiClient.put<UpdateTaskStatusResponse>(
       `/workspaces/${params.workspaceId}/tasks/${params.taskId}/status`,
       {
         status: params.status
