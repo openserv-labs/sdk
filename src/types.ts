@@ -18,6 +18,81 @@ export const taskStatusSchema = z
 
 export type TaskStatus = z.infer<typeof taskStatusSchema>
 
+const triggerEventPayloadWithSummarySchema = z.object({
+  event: z.unknown(),
+  summary: z.string()
+})
+
+export const chatMessageArtifacts = z.array(
+  z.intersection(
+    z.object({
+      id: z.string()
+    }),
+    z.discriminatedUnion('type', [
+      z
+        .object({
+          type: z.literal('json'),
+          data: z.record(z.string(), z.unknown())
+        })
+        .openapi({
+          description:
+            "type is 'json' and the data is a JSON object. This is what your agents will typically use."
+        }),
+      z
+        .object({
+          type: z.literal('artifact-card'),
+          data: z.unknown()
+        })
+        .openapi({
+          description:
+            "type is 'artifact-card' and the data is a JSON object. This is what your users will typically use to respond to the agent's artifact."
+        }),
+      z
+        .object({
+          type: z.literal('artifact-card-response'),
+          artifactId: z.string(),
+          data: z.unknown().nullish()
+        })
+        .openapi({
+          description:
+            "type is 'artifact-card-response' and the artifactId is the id of the artifact that the user responded to."
+        })
+    ])
+  )
+)
+
+export const chatMessageParts = z.object({
+  artifacts: chatMessageArtifacts
+})
+
+const integrationConnectionSchema = z.object({
+  id: z.string(),
+  type: z.enum(['nango', 'custom', 'internal']),
+  identifier: z.string(),
+  name: z.string(),
+  description: z.string(),
+  scopes: z.array(z.string()),
+  connectionName: z.string()
+})
+
+const mcpServersSchema = z.array(
+  z.object({
+    id: z.string(),
+    name: z.string(),
+    description: z.string().nullish(),
+    url: z.string(),
+    headers: z.record(z.string(), z.string()).nullish(),
+    transport: z.enum(['http', 'sse']),
+    tools: z.array(
+      z.object({
+        name: z.string(),
+        description: z.string().nullish(),
+        inputSchema: z.any()
+      })
+    )
+  })
+)
+
 const projectManagerPlanReviewHumanAssistanceQuestionSchema = z.object({
   tasks: z.array(
     z.object({
@@ -66,6 +141,68 @@ const baseHumanAssistanceRequestSchema = z.discriminatedUnion('type', [
 export const doTaskActionSchema = z
   .object({
     type: z.literal('do-task'),
+    workspaceUpdateToken: z.string().nullish(),
+    taskUpdateToken: z.string().nullish(),
+    explicitInput: z.unknown().nullish(),
+    triggerEvents: z.array(
+      z.object({
+        name: z.string(),
+        description: z.string().nullish(),
+        integrationName: z.string().nullish(),
+        integrationType: z.enum(['nango', 'custom', 'internal']),
+        trigger_name: z.string().nullish(),
+        payload: z.array(triggerEventPayloadWithSummarySchema)
+      })
+    ),
+    sessionHistory: z
+      .array(
+        z.object({
+          tasks: z.array(
+            z.object({
+              id: z.number().openapi({ description: 'The ID of the task' }),
+              description: z.string().openapi({
+                description:
+                  "Short description of the task. Usually in the format of 'Do [something]'"
+              }),
+              body: z.string().nullish().openapi({
+                description:
+                  'Additional task information or data. Usually 2-3 sentences if available.'
+              }),
+              expectedOutput: z
+                .string()
+                .nullish()
+                .openapi({ description: 'Preferred output of the task' }),
+              input: z.string().nullish().openapi({
+                description:
+                  "The input information for the task. Typically, it's an output of another task."
+              }),
+              output: z.string().nullish().openapi({
+                description: 'The output of the task. This is the result of the task.'
+              })
+            })
+          ),
+          triggerEvents: z
+            .array(
+              z.object({
+                name: z.string(),
+                description: z.string().nullish(),
+                integrationName: z.string().nullish(),
+                integrationType: z.enum(['nango', 'custom', 'internal']),
+                trigger_name: z.string().nullish(),
+                payload: z.array(triggerEventPayloadWithSummarySchema)
+              })
+            )
+            .openapi({
+              description:
+                'The optional payload of the trigger that triggered the task execution for a session'
+            })
+        })
+      )
+      .optional()
+      .openapi({
+        description:
+          'The optional payload of the trigger that triggered the task execution for a session'
+      }),
     me: z
       .intersection(
         z.object({
@@ -89,7 +226,7 @@ export const doTaskActionSchema = z
       )
       .openapi({ description: 'Your agent instance' }),
     task: z.object({
-      id: z.number().openapi({ description: 'The ID of the task' }),
+      id: z.union([z.number(), z.string()]).openapi({ description: 'The ID of the task' }),
       description: z.string().openapi({
         description: "Short description of the task. Usually in the format of 'Do [something]'"
       }),
@@ -139,15 +276,29 @@ export const doTaskActionSchema = z
         )
       )
     }),
+    triggerEvent: z
+      .object({
+        name: z.string(),
+        description: z.string().nullish(),
+        integrationName: z.string().nullish(),
+        integrationType: z.enum(['nango', 'custom', 'internal']),
+        trigger_name: z.string().nullish(),
+        payload: z.array(triggerEventPayloadWithSummarySchema)
+      })
+      .optional()
+      .openapi({
+        description: 'The optional payload of the trigger that triggered the task execution'
+      }),
     workspace: z.object({
-      id: z.number(),
+      id: z.union([z.number(), z.string()]),
       goal: z.string(),
       bucket_folder: z.string(),
       agents: z.array(
         z.object({
           id: z.number(),
           name: z.string(),
-          capabilities_description: z.string()
+          capabilities_description: z.string(),
+          integrations: z.array(integrationConnectionSchema).optional()
         })
       )
     }),
@@ -167,6 +318,16 @@ export const doTaskActionSchema = z
         })
       })
     ),
+    mcpServers: mcpServersSchema.optional(),
+    agentKnowledgeFiles: z
+      .array(
+        z.object({
+          id: z.number(),
+          path: z.string(),
+          state: z.enum(['pending', 'processing', 'processed', 'error', 'skipped'])
+        })
+      )
+      .optional(),
     memories: z.array(
       z.object({
         id: z.number(),
@@ -180,12 +341,13 @@ export const doTaskActionSchema = z
 export const respondChatMessageActionSchema = z
   .object({
     type: z.literal('respond-chat-message'),
-    workspaceExecutionId: z.number().optional(),
+    workspaceUpdateToken: z.string().nullish(),
     me: z.intersection(
       z.object({
         id: z.number(),
+        uid: z.string().optional(),
         name: z.string(),
-        kind: agentKind
+        kind: z.enum(['external', 'eliza', 'openserv'])
       }),
       z.discriminatedUnion('isBuiltByAgentBuilder', [
         z.object({
@@ -202,36 +364,44 @@ export const respondChatMessageActionSchema = z
         author: z.enum(['agent', 'user']),
         createdAt: z.coerce.date(),
         id: z.number(),
-        message: z.string()
+        message: z.string(),
+        parts: chatMessageParts
       })
     ),
     workspace: z.object({
-      id: z.number(),
+      id: z.union([z.number(), z.string()]),
       goal: z.string(),
       bucket_folder: z.string(),
+      latest_workspace_execution_status: z.enum([
+        'error',
+        'active',
+        'deleted',
+        'idle',
+        'running',
+        'paused',
+        'completed',
+        'timed-out'
+      ]),
       agents: z.array(
         z.object({
           id: z.number(),
           name: z.string(),
-          capabilities_description: z.string()
+          capabilities_description: z.string(),
+          integrations: z.array(integrationConnectionSchema).optional()
         })
       )
     }),
-    integrations: z.array(
-      z.object({
-        id: z.number(),
-        connection_id: z.string(),
-        provider_config_key: z.string(),
-        provider: z.string(),
-        created: z.string().optional(),
-        metadata: z.record(z.string(), z.unknown()).nullish().optional(),
-        scopes: z.array(z.string()).optional(),
-        openAPI: z.object({
-          title: z.string(),
-          description: z.string()
+    integrations: z.array(integrationConnectionSchema),
+    mcpServers: mcpServersSchema.optional(),
+    agentKnowledgeFiles: z
+      .array(
+        z.object({
+          id: z.number(),
+          path: z.string(),
+          state: z.enum(['pending', 'processing', 'processed', 'error', 'skipped'])
         })
-      })
-    ),
+      )
+      .optional(),
     memories: z.array(
       z.object({
         id: z.number(),
@@ -265,7 +435,7 @@ const agentChatMessagesResponseSchema = z.object({
 export type AgentChatMessagesResponse = z.infer<typeof agentChatMessagesResponseSchema>
 
 export interface GetFilesParams {
-  workspaceId: number
+  workspaceId: number | string
 }
 
 export type GetFilesResponse = {
@@ -277,7 +447,7 @@ export type GetFilesResponse = {
 }[]
 
 export interface GetSecretsParams {
-  workspaceId: number
+  workspaceId: number | string
 }
 
 export type GetSecretsResponse = {
@@ -286,7 +456,7 @@ export type GetSecretsResponse = {
 }[]
 
 export interface GetSecretValueParams {
-  workspaceId: number
+  workspaceId: number | string
   secretId: number
 }
 
@@ -297,7 +467,7 @@ export const getFilesParamsSchema = z.object({
 })
 
 export interface UploadFileParams {
-  workspaceId: number
+  workspaceId: number | string
   path: string
   taskIds?: number[] | number | null
   skipSummarizer?: boolean
@@ -311,7 +481,7 @@ export type UploadFileResponse = {
 }
 
 export interface DeleteFileParams {
-  workspaceId: number
+  workspaceId: number | string
   fileId: number
 }
 
@@ -320,23 +490,23 @@ export type DeleteFileResponse = {
 }
 
 export interface MarkTaskAsErroredParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: number | string
+  taskId: number | string
   error: string
 }
 
 export type MarkTaskAsErroredResponse = undefined
 
 export interface CompleteTaskParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: number | string
+  taskId: number | string
   output: string
 }
 
 export type CompleteTaskResponse = undefined
 
 export interface SendChatMessageParams {
-  workspaceId: number
+  workspaceId: number | string
   agentId: number
   message: string
 }
@@ -344,8 +514,8 @@ export interface SendChatMessageParams {
 export type SendChatMessageResponse = undefined
 
 export interface GetTaskDetailParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: number | string
+  taskId: number | string
 }
 
 export type GetTaskDetailResponse = {
@@ -369,7 +539,7 @@ export type GetTaskDetailResponse = {
 }
 
 export interface GetAgentsParams {
-  workspaceId: number
+  workspaceId: number | string
 }
 
 export type GetAgentsResponse = {
@@ -379,12 +549,12 @@ export type GetAgentsResponse = {
 }[]
 
 export interface GetChatMessagesParams {
-  workspaceId: number
+  workspaceId: number | string
   agentId: number
 }
 
 export interface GetTasksParams {
-  workspaceId: number
+  workspaceId: number | string
 }
 
 export type GetTasksResponse = {
@@ -399,7 +569,7 @@ export type GetTasksResponse = {
 }[]
 
 export interface CreateTaskParams {
-  workspaceId: number
+  workspaceId: number | string
   assignee: number
   description: string
   body: string
@@ -413,8 +583,8 @@ export type CreateTaskResponse = {
 }
 
 export interface AddLogToTaskParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: number | string
+  taskId: number | string
   severity: 'info' | 'warning' | 'error'
   type: 'text' | 'openai-message'
   body: string | object
@@ -423,8 +593,8 @@ export interface AddLogToTaskParams {
 export type AddLogToTaskResponse = undefined
 
 export interface RequestHumanAssistanceParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: number | string
+  taskId: number | string
   type: 'text' | 'project-manager-plan-review'
   question: string | object
   agentDump?: object
@@ -433,8 +603,8 @@ export interface RequestHumanAssistanceParams {
 export type RequestHumanAssistanceResponse = undefined
 
 export interface UpdateTaskStatusParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: number | string
+  taskId: number | string
   status: TaskStatus
 }
 
@@ -460,7 +630,7 @@ export interface ProxyConfiguration {
 }
 
 export interface IntegrationCallRequest {
-  workspaceId: number
+  workspaceId: number | string
   integrationId: string
   details: ProxyConfiguration
 }
