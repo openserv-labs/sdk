@@ -450,7 +450,7 @@ const files = await agent.getFiles({
 
 ```typescript
 const task = await agent.createTask({
-  workspaceId: number,
+  workspaceId: number | string,
   assignee: number,
   description: string,
   body: string,
@@ -464,8 +464,8 @@ const task = await agent.createTask({
 
 ```typescript
 await agent.updateTaskStatus({
-  workspaceId: number,
-  taskId: number,
+  workspaceId: number | string,
+  taskId: number | string,
   status: 'to-do' | 'in-progress' | 'human-assistance-required' | 'error' | 'done' | 'cancelled'
 })
 ```
@@ -474,8 +474,8 @@ await agent.updateTaskStatus({
 
 ```typescript
 await agent.addLogToTask({
-  workspaceId: number,
-  taskId: number,
+  workspaceId: number | string,
+  taskId: number | string,
   severity: 'info' | 'warning' | 'error',
   type: 'text' | 'openai-message',
   body: string | object
@@ -488,7 +488,7 @@ await agent.addLogToTask({
 
 ```typescript
 await agent.sendChatMessage({
-  workspaceId: number,
+  workspaceId: number | string,
   agentId: number,
   message: string
 })
@@ -498,8 +498,8 @@ await agent.sendChatMessage({
 
 ```typescript
 await agent.requestHumanAssistance({
-  workspaceId: number,
-  taskId: number,
+  workspaceId: number | string,
+  taskId: number | string,
   type: 'text' | 'project-manager-plan-review',
   question: string | object,
   agentDump?: object
@@ -512,7 +512,7 @@ await agent.requestHumanAssistance({
 
 ```typescript
 const files = await agent.getFiles({
-  workspaceId: number
+  workspaceId: number | string
 })
 ```
 
@@ -520,7 +520,7 @@ const files = await agent.getFiles({
 
 ```typescript
 await agent.uploadFile({
-  workspaceId: number,
+  workspaceId: number | string,
   path: string,
   file: Buffer | string,
   skipSummarizer?: boolean,
@@ -534,7 +534,7 @@ await agent.uploadFile({
 
 ```typescript
 const response = await agent.callIntegration({
-  workspaceId: number,
+  workspaceId: number | string,
   integrationId: string,
   details: {
     endpoint: string,
