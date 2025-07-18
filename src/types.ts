@@ -89,7 +89,7 @@ export const doTaskActionSchema = z
       )
       .openapi({ description: 'Your agent instance' }),
     task: z.object({
-      id: z.number().openapi({ description: 'The ID of the task' }),
+      id: z.union([z.number(), z.string()]).openapi({ description: 'The ID of the task' }),
       description: z.string().openapi({
         description: "Short description of the task. Usually in the format of 'Do [something]'"
       }),
@@ -140,7 +140,7 @@ export const doTaskActionSchema = z
       )
     }),
     workspace: z.object({
-      id: z.number(),
+      id: z.union([z.number(), z.string()]),
       goal: z.string(),
       bucket_folder: z.string(),
       agents: z.array(
@@ -206,7 +206,7 @@ export const respondChatMessageActionSchema = z
       })
     ),
     workspace: z.object({
-      id: z.number(),
+      id: z.union([z.number(), z.string()]),
       goal: z.string(),
       bucket_folder: z.string(),
       agents: z.array(
@@ -264,8 +264,11 @@ const agentChatMessagesResponseSchema = z.object({
 
 export type AgentChatMessagesResponse = z.infer<typeof agentChatMessagesResponseSchema>
 
+type WorkspaceId = string | number
+type TaskId = string | number
+
 export interface GetFilesParams {
-  workspaceId: number
+  workspaceId: WorkspaceId | string
 }
 
 export type GetFilesResponse = {
@@ -277,7 +280,7 @@ export type GetFilesResponse = {
 }[]
 
 export interface GetSecretsParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
 }
 
 export type GetSecretsResponse = {
@@ -286,7 +289,7 @@ export type GetSecretsResponse = {
 }[]
 
 export interface GetSecretValueParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
   secretId: number
 }
 
@@ -297,9 +300,9 @@ export const getFilesParamsSchema = z.object({
 })
 
 export interface UploadFileParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
   path: string
-  taskIds?: number[] | number | null
+  taskIds?: TaskId[] | TaskId | null
   skipSummarizer?: boolean
   file: Buffer | string
 }
@@ -311,7 +314,7 @@ export type UploadFileResponse = {
 }
 
 export interface DeleteFileParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
   fileId: number
 }
 
@@ -320,23 +323,23 @@ export type DeleteFileResponse = {
 }
 
 export interface MarkTaskAsErroredParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: WorkspaceId
+  taskId: TaskId
   error: string
 }
 
 export type MarkTaskAsErroredResponse = undefined
 
 export interface CompleteTaskParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: WorkspaceId
+  taskId: TaskId
   output: string
 }
 
 export type CompleteTaskResponse = undefined
 
 export interface SendChatMessageParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
   agentId: number
   message: string
 }
@@ -344,8 +347,8 @@ export interface SendChatMessageParams {
 export type SendChatMessageResponse = undefined
 
 export interface GetTaskDetailParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: WorkspaceId
+  taskId: TaskId
 }
 
 export type GetTaskDetailResponse = {
@@ -369,7 +372,7 @@ export type GetTaskDetailResponse = {
 }
 
 export interface GetAgentsParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
 }
 
 export type GetAgentsResponse = {
@@ -379,12 +382,12 @@ export type GetAgentsResponse = {
 }[]
 
 export interface GetChatMessagesParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
   agentId: number
 }
 
 export interface GetTasksParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
 }
 
 export type GetTasksResponse = {
@@ -399,7 +402,7 @@ export type GetTasksResponse = {
 }[]
 
 export interface CreateTaskParams {
-  workspaceId: number
+  workspaceId: WorkspaceId
   assignee: number
   description: string
   body: string
@@ -413,8 +416,8 @@ export type CreateTaskResponse = {
 }
 
 export interface AddLogToTaskParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: WorkspaceId
+  taskId: TaskId
   severity: 'info' | 'warning' | 'error'
   type: 'text' | 'openai-message'
   body: string | object
@@ -423,8 +426,8 @@ export interface AddLogToTaskParams {
 export type AddLogToTaskResponse = undefined
 
 export interface RequestHumanAssistanceParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: WorkspaceId
+  taskId: TaskId
   type: 'text' | 'project-manager-plan-review'
   question: string | object
   agentDump?: object
@@ -433,8 +436,8 @@ export interface RequestHumanAssistanceParams {
 export type RequestHumanAssistanceResponse = undefined
 
 export interface UpdateTaskStatusParams {
-  workspaceId: number
-  taskId: number
+  workspaceId: WorkspaceId
+  taskId: TaskId
   status: TaskStatus
 }
 
@@ -460,7 +463,7 @@ export interface ProxyConfiguration {
 }
 
 export interface IntegrationCallRequest {
-  workspaceId: number
+  workspaceId: WorkspaceId
   integrationId: string
   details: ProxyConfiguration
 }
