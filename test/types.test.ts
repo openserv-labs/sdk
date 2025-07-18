@@ -5,7 +5,6 @@ import {
   doTaskActionSchema,
   respondChatMessageActionSchema,
   UploadFileParams,
-  GetFilesParams,
   MarkTaskAsErroredParams,
   CompleteTaskParams,
   SendChatMessageParams,
@@ -19,7 +18,6 @@ import {
   RequestHumanAssistanceParams,
   UpdateTaskStatusParams,
   ProcessParams,
-  getFilesParamsSchema,
   GetChatMessagesParams
 } from '../src/types'
 
@@ -46,10 +44,23 @@ describe('Action Schemas', () => {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
-      memories: []
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -70,16 +81,28 @@ describe('Action Schemas', () => {
           author: 'user',
           createdAt: new Date(),
           id: 1,
-          message: 'test message'
+          message: 'test message',
+          parts: { artifacts: [] }
         }
       ],
       workspace: {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
       memories: []
     }
 
@@ -109,10 +132,23 @@ describe('Action Schemas', () => {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
-      memories: []
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const respondChatAction = {
@@ -128,16 +164,28 @@ describe('Action Schemas', () => {
           author: 'user',
           createdAt: new Date(),
           id: 1,
-          message: 'test message'
+          message: 'test message',
+          parts: { artifacts: [] }
         }
       ],
       workspace: {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
       memories: []
     }
 
@@ -190,7 +238,8 @@ describe('Action Schemas', () => {
           author: 'invalid-author',
           createdAt: new Date(),
           id: 1,
-          message: 'test message'
+          message: 'test message',
+          parts: { artifacts: [] }
         }
       ]
     }
@@ -251,60 +300,6 @@ describe('Action Schemas', () => {
       file: 'test content'
     }
     assert.ok(params6)
-  })
-
-  test('should validate GetFilesParams', () => {
-    // Test valid case
-    const params: GetFilesParams = {
-      workspaceId: 1
-    }
-    const result = getFilesParamsSchema.parse(params)
-    assert.deepStrictEqual(result, params)
-
-    // Test invalid workspaceId types
-    assert.throws(() => {
-      getFilesParamsSchema.parse({
-        workspaceId: '1'
-      })
-    }, /Expected number, received string/)
-
-    assert.throws(() => {
-      getFilesParamsSchema.parse({
-        workspaceId: null
-      })
-    }, /Expected number, received null/)
-
-    assert.throws(() => {
-      getFilesParamsSchema.parse({
-        workspaceId: undefined
-      })
-    }, /Required/)
-
-    // Test with missing workspaceId
-    assert.throws(() => {
-      getFilesParamsSchema.parse({})
-    }, /Required/)
-
-    // Test with negative workspaceId
-    assert.throws(() => {
-      getFilesParamsSchema.parse({
-        workspaceId: -1
-      })
-    }, /Number must be greater than 0/)
-
-    // Test with zero workspaceId
-    assert.throws(() => {
-      getFilesParamsSchema.parse({
-        workspaceId: 0
-      })
-    }, /Number must be greater than 0/)
-
-    // Test with decimal workspaceId
-    assert.throws(() => {
-      getFilesParamsSchema.parse({
-        workspaceId: 1.5
-      })
-    }, /Expected integer, received float/)
   })
 
   test('should validate MarkTaskAsErroredParams', () => {
@@ -406,10 +401,23 @@ describe('Action Schemas', () => {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
-      memories: []
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
+      memories: [],
+      triggerEvents: [], // here
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -556,10 +564,23 @@ describe('Action Schemas', () => {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
-      memories: []
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -638,10 +659,23 @@ describe('Action Schemas', () => {
         id: 1,
         goal: 'test goal',
         bucket_folder: 'test-folder',
-        agents: []
+        agents: [],
+        latest_workspace_execution_status: 'active'
       },
-      integrations: [],
-      memories: []
+      integrations: [
+        {
+          id: '1',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
+        }
+      ],
+      memories: [],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -680,29 +714,22 @@ describe('Action Schemas', () => {
       },
       integrations: [
         {
-          id: 3,
-          connection_id: 'test-connection',
-          provider_config_key: 'test-provider',
-          provider: 'test',
-          created: '2024-01-01',
-          metadata: { key: 'value' },
-          scopes: ['read', 'write'],
-          openAPI: {
-            title: 'Test API',
-            description: 'Test API description'
-          }
+          id: '3',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope'],
+          connectionName: 'aa'
         },
         {
-          id: 4,
-          connection_id: 'test-connection-2',
-          provider_config_key: 'test-provider-2',
-          provider: 'test-2',
-          created: '2024-01-02',
-          metadata: null,
-          openAPI: {
-            title: 'Test API 2',
-            description: 'Test API description 2'
-          }
+          id: '4',
+          connectionName: 'test-connection-2',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope']
         }
       ],
       memories: [
@@ -711,7 +738,9 @@ describe('Action Schemas', () => {
           memory: 'test memory',
           createdAt: new Date('2024-01-01')
         }
-      ]
+      ],
+      triggerEvents: [],
+      sessionHistory: []
     }
 
     const result = doTaskActionSchema.parse(action)
@@ -733,13 +762,15 @@ describe('Action Schemas', () => {
           author: 'user',
           createdAt: new Date(),
           id: 1,
-          message: 'test message'
+          message: 'test message',
+          parts: { artifacts: [] }
         },
         {
           author: 'agent',
           createdAt: new Date(),
           id: 2,
-          message: 'test response'
+          message: 'test response',
+          parts: { artifacts: [] }
         }
       ],
       workspace: {
@@ -752,21 +783,18 @@ describe('Action Schemas', () => {
             name: 'test agent',
             capabilities_description: 'test capabilities'
           }
-        ]
+        ],
+        latest_workspace_execution_status: 'active'
       },
       integrations: [
         {
-          id: 3,
-          connection_id: 'test-connection',
-          provider_config_key: 'test-provider',
-          provider: 'test',
-          created: '2024-01-01',
-          metadata: { key: 'value' },
-          scopes: ['read', 'write'],
-          openAPI: {
-            title: 'Test API',
-            description: 'Test API description'
-          }
+          id: '3',
+          connectionName: 'test-connection',
+          type: 'custom',
+          identifier: 'abc',
+          name: 'int a',
+          description: 'desc',
+          scopes: ['scope']
         }
       ],
       memories: [

@@ -293,6 +293,9 @@ export const doTaskActionSchema = z
       id: z.union([z.number(), z.string()]),
       goal: z.string(),
       bucket_folder: z.string(),
+      latest_workspace_execution_status: z
+        .enum(['error', 'active', 'deleted', 'idle', 'running', 'paused', 'completed', 'timed-out'])
+        .optional(),
       agents: z.array(
         z.object({
           id: z.number(),
@@ -303,21 +306,7 @@ export const doTaskActionSchema = z
       )
     }),
     workspaceExecutionId: z.number().optional(),
-    integrations: z.array(
-      z.object({
-        id: z.number(),
-        connection_id: z.string(),
-        provider_config_key: z.string(),
-        provider: z.string(),
-        created: z.string(),
-        metadata: z.record(z.string(), z.unknown()).nullish(),
-        scopes: z.array(z.string()).optional(),
-        openAPI: z.object({
-          title: z.string(),
-          description: z.string()
-        })
-      })
-    ),
+    integrations: z.array(integrationConnectionSchema),
     mcpServers: mcpServersSchema.optional(),
     agentKnowledgeFiles: z
       .array(
@@ -343,20 +332,10 @@ export const respondChatMessageActionSchema = z
     type: z.literal('respond-chat-message'),
     workspaceUpdateToken: z.string().nullish(),
     me: z.intersection(
-      z.object({
-        id: z.number(),
-        uid: z.string().optional(),
-        name: z.string(),
-        kind: z.enum(['external', 'eliza', 'openserv'])
-      }),
+      z.object({ id: z.number(), name: z.string(), kind: agentKind }),
       z.discriminatedUnion('isBuiltByAgentBuilder', [
-        z.object({
-          isBuiltByAgentBuilder: z.literal(false)
-        }),
-        z.object({
-          isBuiltByAgentBuilder: z.literal(true),
-          systemPrompt: z.string()
-        })
+        z.object({ isBuiltByAgentBuilder: z.literal(false) }),
+        z.object({ isBuiltByAgentBuilder: z.literal(true), systemPrompt: z.string() })
       ])
     ),
     messages: z.array(
@@ -365,50 +344,22 @@ export const respondChatMessageActionSchema = z
         createdAt: z.coerce.date(),
         id: z.number(),
         message: z.string(),
-        parts: chatMessageParts
+        parts: chatMessageParts.optional().default({ artifacts: [] })
       })
     ),
     workspace: z.object({
-      id: z.union([z.number(), z.string()]),
+      id: z.number(),
       goal: z.string(),
       bucket_folder: z.string(),
-      latest_workspace_execution_status: z.enum([
-        'error',
-        'active',
-        'deleted',
-        'idle',
-        'running',
-        'paused',
-        'completed',
-        'timed-out'
-      ]),
+      latest_workspace_execution_status: z
+        .enum(['error', 'active', 'deleted', 'idle', 'running', 'paused', 'completed', 'timed-out'])
+        .optional(),
       agents: z.array(
-        z.object({
-          id: z.number(),
-          name: z.string(),
-          capabilities_description: z.string(),
-          integrations: z.array(integrationConnectionSchema).optional()
-        })
+        z.object({ id: z.number(), name: z.string(), capabilities_description: z.string() })
       )
     }),
     integrations: z.array(integrationConnectionSchema),
-    mcpServers: mcpServersSchema.optional(),
-    agentKnowledgeFiles: z
-      .array(
-        z.object({
-          id: z.number(),
-          path: z.string(),
-          state: z.enum(['pending', 'processing', 'processed', 'error', 'skipped'])
-        })
-      )
-      .optional(),
-    memories: z.array(
-      z.object({
-        id: z.number(),
-        memory: z.string(),
-        createdAt: z.coerce.date()
-      })
-    )
+    memories: z.array(z.object({ id: z.number(), memory: z.string(), createdAt: z.coerce.date() }))
   })
   .openapi('respondChatMessageActionSchema')
 
