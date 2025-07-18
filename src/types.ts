@@ -434,8 +434,11 @@ const agentChatMessagesResponseSchema = z.object({
 
 export type AgentChatMessagesResponse = z.infer<typeof agentChatMessagesResponseSchema>
 
+type WorkspaceId = string | number
+type TaskId = string | number
+
 export interface GetFilesParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId | string
 }
 
 export type GetFilesResponse = {
@@ -447,7 +450,7 @@ export type GetFilesResponse = {
 }[]
 
 export interface GetSecretsParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
 }
 
 export type GetSecretsResponse = {
@@ -456,7 +459,7 @@ export type GetSecretsResponse = {
 }[]
 
 export interface GetSecretValueParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   secretId: number
 }
 
@@ -467,9 +470,9 @@ export const getFilesParamsSchema = z.object({
 })
 
 export interface UploadFileParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   path: string
-  taskIds?: number[] | number | null
+  taskIds?: TaskId[] | TaskId | null
   skipSummarizer?: boolean
   file: Buffer | string
 }
@@ -481,7 +484,7 @@ export type UploadFileResponse = {
 }
 
 export interface DeleteFileParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   fileId: number
 }
 
@@ -490,23 +493,23 @@ export type DeleteFileResponse = {
 }
 
 export interface MarkTaskAsErroredParams {
-  workspaceId: number | string
-  taskId: number | string
+  workspaceId: WorkspaceId
+  taskId: TaskId
   error: string
 }
 
 export type MarkTaskAsErroredResponse = undefined
 
 export interface CompleteTaskParams {
-  workspaceId: number | string
-  taskId: number | string
+  workspaceId: WorkspaceId
+  taskId: TaskId
   output: string
 }
 
 export type CompleteTaskResponse = undefined
 
 export interface SendChatMessageParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   agentId: number
   message: string
 }
@@ -514,8 +517,8 @@ export interface SendChatMessageParams {
 export type SendChatMessageResponse = undefined
 
 export interface GetTaskDetailParams {
-  workspaceId: number | string
-  taskId: number | string
+  workspaceId: WorkspaceId
+  taskId: TaskId
 }
 
 export type GetTaskDetailResponse = {
@@ -539,7 +542,7 @@ export type GetTaskDetailResponse = {
 }
 
 export interface GetAgentsParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
 }
 
 export type GetAgentsResponse = {
@@ -549,12 +552,12 @@ export type GetAgentsResponse = {
 }[]
 
 export interface GetChatMessagesParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   agentId: number
 }
 
 export interface GetTasksParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
 }
 
 export type GetTasksResponse = {
@@ -569,7 +572,7 @@ export type GetTasksResponse = {
 }[]
 
 export interface CreateTaskParams {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   assignee: number
   description: string
   body: string
@@ -583,8 +586,8 @@ export type CreateTaskResponse = {
 }
 
 export interface AddLogToTaskParams {
-  workspaceId: number | string
-  taskId: number | string
+  workspaceId: WorkspaceId
+  taskId: TaskId
   severity: 'info' | 'warning' | 'error'
   type: 'text' | 'openai-message'
   body: string | object
@@ -593,8 +596,8 @@ export interface AddLogToTaskParams {
 export type AddLogToTaskResponse = undefined
 
 export interface RequestHumanAssistanceParams {
-  workspaceId: number | string
-  taskId: number | string
+  workspaceId: WorkspaceId
+  taskId: TaskId
   type: 'text' | 'project-manager-plan-review'
   question: string | object
   agentDump?: object
@@ -603,8 +606,8 @@ export interface RequestHumanAssistanceParams {
 export type RequestHumanAssistanceResponse = undefined
 
 export interface UpdateTaskStatusParams {
-  workspaceId: number | string
-  taskId: number | string
+  workspaceId: WorkspaceId
+  taskId: TaskId
   status: TaskStatus
 }
 
@@ -630,7 +633,7 @@ export interface ProxyConfiguration {
 }
 
 export interface IntegrationCallRequest {
-  workspaceId: number | string
+  workspaceId: WorkspaceId
   integrationId: string
   details: ProxyConfiguration
 }
