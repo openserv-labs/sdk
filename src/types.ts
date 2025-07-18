@@ -465,10 +465,6 @@ export interface GetSecretValueParams {
 
 export type GetSecretValueResponse = string
 
-export const getFilesParamsSchema = z.object({
-  workspaceId: z.number().int().positive()
-})
-
 export interface UploadFileParams {
   workspaceId: WorkspaceId
   path: string
