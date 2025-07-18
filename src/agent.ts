@@ -913,7 +913,6 @@ export class Agent<M extends string> {
 
       const args = await tool.schema.parseAsync(req.body?.args)
       const messages = req.body.messages || []
-      setActionIdsFromTokens(req.body.action)
       const result = await tool.run.call(this, { args, action: req.body.action }, messages)
       return { result }
     } catch (error) {
@@ -1121,17 +1120,6 @@ export class Agent<M extends string> {
           }
         }
       })
-    }
-  }
-}
-
-function setActionIdsFromTokens(action: any) {
-  if (action) {
-    if (action.task && action.taskUpdateToken) {
-      action.task.id = action.taskUpdateToken
-    }
-    if (action.workspace && action.workspaceUpdateToken) {
-      action.workspace.id = action.workspaceUpdateToken
     }
   }
 }
