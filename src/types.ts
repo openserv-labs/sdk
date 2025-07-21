@@ -348,7 +348,7 @@ export const respondChatMessageActionSchema = z
       })
     ),
     workspace: z.object({
-      id: z.number(),
+      id: z.union([z.number(), z.string()]),
       goal: z.string(),
       bucket_folder: z.string(),
       latest_workspace_execution_status: z
