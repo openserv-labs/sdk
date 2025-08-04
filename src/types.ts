@@ -274,21 +274,22 @@ export const doTaskActionSchema = z
             })
             .openapi({ description: 'List of Human Assistance Requests' })
         )
-      )
+      ),
+      triggerEvent: z
+        .object({
+          name: z.string(),
+          description: z.string().nullish(),
+          integrationName: z.string().nullish(),
+          integrationType: z.enum(['nango', 'custom', 'internal']),
+          trigger_name: z.string().nullish(),
+          payload: z.array(triggerEventPayloadWithSummarySchema)
+        })
+        .optional()
+        .openapi({
+          description: 'The optional payload of the trigger that triggered the task execution'
+        })
     }),
-    triggerEvent: z
-      .object({
-        name: z.string(),
-        description: z.string().nullish(),
-        integrationName: z.string().nullish(),
-        integrationType: z.enum(['nango', 'custom', 'internal']),
-        trigger_name: z.string().nullish(),
-        payload: z.array(triggerEventPayloadWithSummarySchema)
-      })
-      .optional()
-      .openapi({
-        description: 'The optional payload of the trigger that triggered the task execution'
-      }),
+
     workspace: z.object({
       id: z.union([z.number(), z.string()]),
       goal: z.string(),
