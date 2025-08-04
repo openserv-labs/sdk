@@ -1,13 +1,6 @@
 import axios, { type AxiosInstance } from 'axios'
-import bcrypt from 'bcryptjs'
-import compression from 'compression'
-import express, { type Handler } from 'express'
-import type { AsyncRouterInstance } from 'express-async-router'
-import { AsyncRouter } from 'express-async-router'
-import helmet from 'helmet'
-import hpp from 'hpp'
 import { logger } from './logger'
-import type http from 'node:http'
+import WebSocket from 'ws'
 import type {
   GetFilesParams,
   GetSecretsParams,
@@ -68,19 +61,14 @@ import {
 
 const PLATFORM_URL = process.env.OPENSERV_API_URL || 'https://api.openserv.ai'
 const RUNTIME_URL = process.env.OPENSERV_RUNTIME_URL || 'https://agents.openserv.ai'
-const DEFAULT_PORT = Number.parseInt(process.env.PORT || '') || 7378
-const AUTH_TOKEN = process.env.OPENSERV_AUTH_TOKEN
+const DEFAULT_PROXY_URL = process.env.OPENSERV_PROXY_URL || 'https://agents-proxy.openserv.ai'
+const MAX_RECONNECTION_ATTEMPTS = 10
+const FORCE_TUNNEL = process.env.FORCE_TUNNEL === 'true'
 
 /**
  * Configuration options for creating a new Agent instance.
  */
 export interface AgentOptions<T extends string> {
-  /**
-   * The port number for the agent's HTTP server.
-   * Defaults to 7378 if not specified.
-   */
-  port?: number
-
   /**
    * The OpenServ API key for authentication.
    * Can also be provided via OPENSERV_API_KEY environment variable.
@@ -114,52 +102,48 @@ export interface AgentOptions<T extends string> {
   mcpServers?: Record<T, MCPServerConfig>
 }
 
-const authTokenMiddleware: Handler = async (req, res, next) => {
-  const tokenHash = req.headers['x-openserv-auth-token']
-
-  if (!tokenHash || typeof tokenHash !== 'string') {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
-  }
-
-  const isTokenValid = await bcrypt.compare(AUTH_TOKEN as string, tokenHash)
-
-  if (!isTokenValid) {
-    res.status(401).json({ error: 'Unauthorized' })
-    return
-  }
-
-  next()
-}
-
 export class Agent<M extends string> {
   /**
-   * The Express application instance used to handle HTTP requests.
-   * This is initialized in the constructor and used to set up middleware and routes.
+   * WebSocket connection to the OpenServ proxy
    * @private
    */
-  private app: express.Application
+  private ws: WebSocket | null = null
 
   /**
-   * The HTTP server instance created from the Express application.
-   * This is initialized when start() is called and used to listen for incoming requests.
+   * Tunnel ID for the WebSocket connection
    * @private
    */
-  private server: http.Server | null = null
+  private tunnelId: string | null = null
 
   /**
-   * The Express router instance used to define API routes.
-   * This handles routing for health checks, tool execution, and action handling.
+   * Public URL provided by the proxy
    * @private
    */
-  private router: AsyncRouterInstance
+  private publicUrl: string | null = null
 
   /**
-   * The port number the server will listen on.
-   * Defaults to DEFAULT_PORT (7378) if not specified in options.
+   * Number of reconnection attempts
    * @private
    */
-  private port: number
+  private reconnectAttempts: number = 0
+
+  /**
+   * Whether the agent is currently connecting
+   * @private
+   */
+  private isConnecting: boolean = false
+
+  /**
+   * Whether the agent should attempt to reconnect
+   * @private
+   */
+  private shouldReconnect: boolean = true
+
+  /**
+   * Timestamp when disconnection occurred
+   * @private
+   */
+  private disconnectedAt: number | null = null
 
   /**
    * The system prompt used for OpenAI chat completions.
@@ -248,16 +232,12 @@ export class Agent<M extends string> {
 
   /**
    * Creates a new Agent instance.
-   * Sets up the Express application, middleware, and routes.
    * Initializes API clients with appropriate authentication.
    *
    * @param {AgentOptions} options - Configuration options for the agent
    * @throws {Error} If OpenServ API key is not provided in options or environment
    */
   constructor(private options: AgentOptions<M>) {
-    this.app = express()
-    this.router = AsyncRouter()
-    this.port = this.options.port || DEFAULT_PORT
     this.systemPrompt = this.options.systemPrompt
     this.apiKey = this.options.apiKey || process.env.OPENSERV_API_KEY || ''
 
@@ -284,20 +264,6 @@ export class Agent<M extends string> {
         'x-openserv-key': this.apiKey
       }
     })
-
-    this.app.use(express.json())
-    this.app.use(express.urlencoded({ extended: false }))
-    this.app.use(hpp())
-    this.app.use(helmet())
-    this.app.use(compression())
-
-    if (AUTH_TOKEN) {
-      this.app.use(authTokenMiddleware)
-    } else {
-      logger.warn('OPENSERV_AUTH_TOKEN is not set. All requests will be allowed.')
-    }
-
-    this.setupRoutes()
 
     this.initializeMCPClients()
   }
@@ -831,7 +797,11 @@ export class Agent<M extends string> {
 
     try {
       await this.runtimeClient.post('/execute', {
-        tools: this.tools.map(convertToolToJsonSchema),
+        tools: this.tools.map(tool => ({
+          name: tool.name,
+          description: tool.description,
+          schema: zodToJsonSchema(tool.schema)
+        })),
         messages,
         action
       })
@@ -867,7 +837,11 @@ export class Agent<M extends string> {
 
     try {
       await this.runtimeClient.post('/chat', {
-        tools: this.tools.map(convertToolToJsonSchema),
+        tools: this.tools.map(tool => ({
+          name: tool.name,
+          description: tool.description,
+          schema: zodToJsonSchema(tool.schema)
+        })),
         messages,
         action
       })
@@ -880,118 +854,13 @@ export class Agent<M extends string> {
   }
 
   /**
-   * Handles execution of a specific tool/capability.
+   * Starts the agent by connecting to the OpenServ proxy via WebSocket.
    *
-   * @param {Object} req - The request object
-   * @param {Object} req.params - Request parameters
-   * @param {string} req.params.toolName - Name of the tool to execute
-   * @param {Object} req.body - Request body
-   * @param {z.infer<z.ZodTypeAny>} [req.body.args] - Arguments for the tool
-   * @param {z.infer<typeof actionSchema>} [req.body.action] - Action context
-   * @param {ChatCompletionMessageParam[]} [req.body.messages] - Message history
-   * @returns {Promise<{result: string}>} The result of the tool execution
-   * @throws {BadRequest} If tool name is missing or tool is not found
-   * @throws {Error} If tool execution fails
-   */
-  async handleToolRoute(req: {
-    params: { toolName: string }
-    body: {
-      args?: z.infer<z.ZodTypeAny>
-      action?: z.infer<typeof actionSchema>
-      messages?: ChatCompletionMessageParam[]
-    }
-  }) {
-    try {
-      if (!('toolName' in req.params)) {
-        throw new BadRequest('Tool name is required')
-      }
-
-      const tool = this.tools.find(t => t.name === req.params.toolName)
-      if (!tool) {
-        throw new BadRequest(`Tool "${req.params.toolName}" not found`)
-      }
-
-      const args = await tool.schema.parseAsync(req.body?.args)
-      const messages = req.body.messages || []
-      const result = await tool.run.call(this, { args, action: req.body.action }, messages)
-      return { result }
-    } catch (error) {
-      this.handleError(error instanceof Error ? error : new Error(String(error)), {
-        request: req,
-        context: 'handle_tool_route'
-      })
-
-      throw error
-    }
-  }
-
-  /**
-   * Handles the root route for task execution and chat message responses.
-   *
-   * @param {Object} req - The request object
-   * @param {unknown} req.body - Request body to be parsed as an action
-   * @returns {Promise<void>}
-   * @throws {Error} If action type is invalid
-   */
-  async handleRootRoute(req: { body: unknown }) {
-    try {
-      const action = await actionSchema.parseAsync(req.body)
-      if (action.type === 'do-task') {
-        this.doTask(action)
-      } else if (action.type === 'respond-chat-message') {
-        this.respondToChat(action)
-      } else throw new Error('Invalid action type')
-    } catch (error) {
-      this.handleError(error instanceof Error ? error : new Error(String(error)), {
-        request: req,
-        context: 'handle_root_route'
-      })
-    }
-  }
-
-  /**
-   * Sets up the Express routes for the agent's HTTP server.
-   * Configures health check endpoint and routes for tool execution.
-   * @private
-   */
-  private setupRoutes() {
-    this.router.get('/health', async (_req: express.Request, res: express.Response) => {
-      res.status(200).json({ status: 'ok', uptime: process.uptime() })
-    })
-
-    this.router.post('/', async (req: express.Request) => {
-      return this.handleRootRoute({ body: req.body })
-    })
-
-    this.router.post('/tools/:toolName', async (req: express.Request) => {
-      const { toolName } = req.params
-      if (!toolName) {
-        throw new BadRequest('Tool name is required')
-      }
-      return this.handleToolRoute({
-        params: { toolName },
-        body: req.body
-      })
-    })
-
-    this.app.use('/', this.router)
-  }
-
-  /**
-   * Starts the agent's HTTP server.
-   *
-   * @returns {Promise<void>} Resolves when the server has started
-   * @throws {Error} If server fails to start
+   * @returns {Promise<void>} Resolves when the connection is established
+   * @throws {Error} If connection fails
    */
   async start(): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      this.server = this.app.listen(this.port, () => {
-        logger.info(`Agent server started on port ${this.port}`)
-        resolve()
-      })
-      this.server.on('error', reject)
-    })
-
+    // Connect MCP clients first
     const connectionPromises = Object.values<MCPClient<M>>(this.mcpClients).map(client =>
       client.connect()
     )
@@ -1026,19 +895,369 @@ export class Agent<M extends string> {
     } catch (mcpError) {
       logger.error({ error: mcpError }, 'Error during MCP tools registration')
     }
+
+    // Connect to the WebSocket proxy
+    await this.connectToProxy()
   }
 
   /**
-   * Stops the agent's HTTP server.
-   *
-   * @returns {Promise<void>} Resolves when the server has stopped
+   * Connects to the OpenServ proxy via WebSocket
+   * @private
    */
-  async stop() {
-    if (!this.server) return
+  private async connectToProxy(): Promise<void> {
+    if (this.isConnecting) return
+    this.isConnecting = true
 
-    return new Promise<void>(resolve => {
-      this.server?.close(() => resolve())
-    })
+    try {
+      if (!this.apiKey) {
+        throw new Error('API key is required. Set OPENSERV_API_KEY environment variable.')
+      }
+
+      logger.info(`Connecting to OpenServ proxy...`)
+      if (this.tunnelId) {
+        logger.info(`Reconnecting with tunnel ID: ${this.tunnelId}`)
+      }
+
+      if (FORCE_TUNNEL) {
+        logger.info('Force tunnel override: enabled')
+      }
+
+      // Convert HTTP URL to WebSocket URL
+      const wsUrl = DEFAULT_PROXY_URL.replace(/^http/, 'ws') + '/ws'
+
+      // Add registration data in WebSocket headers
+      const wsOptions: { headers: Record<string, string> } = {
+        headers: {
+          'User-Agent': 'OpenServ-Agent/1.0.0',
+          'X-Api-Key': this.apiKey
+        }
+      }
+
+      // Add tunnel ID if we have one (for reconnection)
+      if (this.tunnelId) {
+        wsOptions.headers['X-Tunnel-ID'] = this.tunnelId
+      }
+
+      // Add force tunnel flag if set
+      if (FORCE_TUNNEL) {
+        wsOptions.headers['X-Force-Tunnel'] = 'true'
+      }
+
+      this.ws = new WebSocket(wsUrl, wsOptions)
+
+      this.ws.on('open', () => {
+        this.reconnectAttempts = 0 // Reset on successful connection
+        this.isConnecting = false
+        logger.info('Connected to OpenServ proxy')
+      })
+
+      // Handle ping from server
+      this.ws.on('ping', (data: Buffer) => {
+        this.ws?.pong(data)
+      })
+
+      this.ws.on('message', async (data: WebSocket.Data) => {
+        try {
+          const message = JSON.parse(data.toString())
+          await this.handleWebSocketMessage(message)
+        } catch (error) {
+          logger.error({ error }, 'Error processing WebSocket message')
+        }
+      })
+
+      this.ws.on('close', async (code: number, reason: Buffer) => {
+        this.isConnecting = false
+        logger.info(`WebSocket disconnected: ${code} ${reason.toString()}`)
+
+        // Record disconnect time for reconnection timing
+        if (this.shouldReconnect && this.reconnectAttempts < MAX_RECONNECTION_ATTEMPTS) {
+          if (!this.disconnectedAt) {
+            this.disconnectedAt = Date.now()
+          }
+          await this.attemptReconnection()
+        } else if (this.reconnectAttempts >= MAX_RECONNECTION_ATTEMPTS) {
+          logger.error('Max reconnection attempts reached. Giving up.')
+          process.exit(1)
+        }
+      })
+
+      this.ws.on('error', (error: Error) => {
+        this.isConnecting = false
+        logger.error({ error }, 'WebSocket connection error')
+
+        // Record disconnect time for reconnection timing if we're going to reconnect
+        if (this.shouldReconnect && this.reconnectAttempts < MAX_RECONNECTION_ATTEMPTS) {
+          if (!this.disconnectedAt) {
+            this.disconnectedAt = Date.now()
+          }
+        }
+
+        if (this.shouldReconnect && this.reconnectAttempts < MAX_RECONNECTION_ATTEMPTS) {
+          this.attemptReconnection()
+        }
+      })
+    } catch (error) {
+      this.isConnecting = false
+      logger.error({ error }, 'Error connecting to proxy')
+
+      if (this.shouldReconnect && this.reconnectAttempts < MAX_RECONNECTION_ATTEMPTS) {
+        if (!this.disconnectedAt) {
+          this.disconnectedAt = Date.now()
+        }
+        await this.attemptReconnection()
+      }
+    }
+  }
+
+  /**
+   * Handles WebSocket messages from the proxy
+   * @private
+   */
+  private async handleWebSocketMessage(message: any): Promise<void> {
+    if (message.type === 'error') {
+      // Handle tunnel creation errors
+      if (message.error === 'TUNNEL_EXISTS') {
+        logger.error(`Tunnel error: ${message.message}`)
+
+        if (message.existingTunnel) {
+          logger.info('Existing tunnel details:', {
+            tunnelId: message.existingTunnel.tunnelId,
+            publicUrl: message.existingTunnel.publicUrl,
+            localPort: message.existingTunnel.localPort
+          })
+        }
+
+        logger.info(
+          'To force overwrite the existing tunnel, set FORCE_TUNNEL=true environment variable'
+        )
+        this.shouldReconnect = false
+        process.exit(1)
+      } else {
+        logger.error(`Tunnel error: ${message.message}`)
+        this.shouldReconnect = false
+        process.exit(1)
+      }
+    } else if (message.type === 'registered') {
+      // Handle tunnel registration confirmation
+      const tunnelData = message.data
+      this.tunnelId = tunnelData.tunnelId
+      this.publicUrl = tunnelData.publicUrl
+
+      if (tunnelData.reconnected) {
+        // Calculate reconnection time if we have a disconnect timestamp
+        if (this.disconnectedAt) {
+          const reconnectDuration = Date.now() - this.disconnectedAt
+          logger.info(`Tunnel reconnected! (${(reconnectDuration / 1000).toFixed(2)}s)`)
+          this.disconnectedAt = null // Reset the timer
+        } else {
+          logger.info('Tunnel reconnected!')
+        }
+      } else {
+        logger.info('Tunnel ready!')
+      }
+      logger.info(`Public URL: ${tunnelData.publicUrl}`)
+    } else if (message.type === 'request') {
+      await this.handleProxyRequest(message.data)
+    }
+  }
+
+  /**
+   * Handles incoming requests from the proxy
+   * @private
+   */
+  private async handleProxyRequest(requestData: any): Promise<void> {
+    const { method, path, body, id } = requestData
+
+    try {
+      let response: { status: number; headers: Record<string, string>; body: string }
+
+      // Route the request based on method and path
+      if (method === 'GET' && path === '/health') {
+        response = {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ status: 'ok', uptime: process.uptime() })
+        }
+      } else if (method === 'POST' && path === '/') {
+        // Handle root route (task execution and chat responses)
+        try {
+          const parsedBody = typeof body === 'string' ? JSON.parse(body) : body
+          const action = await actionSchema.parseAsync(parsedBody)
+          if (action.type === 'do-task') {
+            await this.doTask(action)
+          } else if (action.type === 'respond-chat-message') {
+            await this.respondToChat(action)
+          } else {
+            throw new Error('Invalid action type')
+          }
+          response = {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ success: true })
+          }
+        } catch (error) {
+          response = {
+            status: 400,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              error: 'Bad Request',
+              message: error instanceof Error ? error.message : 'Unknown error'
+            })
+          }
+        }
+      } else if (method === 'POST' && path.startsWith('/tools/')) {
+        // Handle tool execution
+        const toolName = path.split('/tools/')[1]
+        try {
+          const parsedBody = typeof body === 'string' ? JSON.parse(body) : body
+
+          if (!toolName) {
+            throw new BadRequest('Tool name is required')
+          }
+
+          const tool = this.tools.find(t => t.name === toolName)
+          if (!tool) {
+            throw new BadRequest(`Tool "${toolName}" not found`)
+          }
+
+          const args = await tool.schema.parseAsync(parsedBody?.args)
+          const messages = parsedBody.messages || []
+          const result = await tool.run.call(this, { args, action: parsedBody.action }, messages)
+
+          response = {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ result })
+          }
+        } catch (error) {
+          response = {
+            status: error instanceof BadRequest ? 400 : 500,
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+              error: error instanceof BadRequest ? 'Bad Request' : 'Internal Server Error',
+              message: error instanceof Error ? error.message : 'Unknown error'
+            })
+          }
+        }
+      } else {
+        // Handle unknown routes
+        response = {
+          status: 404,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ error: 'Not Found', message: `${method} ${path} not found` })
+        }
+      }
+
+      // Send response back through WebSocket
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(
+          JSON.stringify({
+            type: 'response',
+            data: {
+              id,
+              status: response.status,
+              headers: response.headers,
+              body: response.body
+            }
+          })
+        )
+      }
+    } catch (error) {
+      logger.error({ error }, 'Error handling proxy request')
+
+      // Send error response
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.send(
+          JSON.stringify({
+            type: 'response',
+            data: {
+              id,
+              status: 502,
+              headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({
+                error: 'Bad Gateway',
+                message: error instanceof Error ? error.message : 'Unknown error'
+              })
+            }
+          })
+        )
+      }
+    }
+  }
+
+  /**
+   * Attempts to reconnect to the proxy with exponential backoff
+   * @private
+   */
+  private async attemptReconnection(): Promise<void> {
+    this.reconnectAttempts++
+
+    // First attempt is instant, then exponential backoff starts
+    const delay =
+      this.reconnectAttempts === 1
+        ? 0
+        : Math.min(1000 * Math.pow(2, this.reconnectAttempts - 2), 30000) // Max 30 seconds
+
+    if (delay === 0) {
+      logger.info(
+        `Reconnection attempt ${this.reconnectAttempts}/${MAX_RECONNECTION_ATTEMPTS} (instant)...`
+      )
+    } else {
+      logger.info(
+        `Reconnection attempt ${this.reconnectAttempts}/${MAX_RECONNECTION_ATTEMPTS} in ${delay / 1000}s...`
+      )
+    }
+
+    await this.sleep(delay)
+    await this.connectToProxy()
+  }
+
+  /**
+   * Sleep utility function
+   * @private
+   */
+  private async sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms))
+  }
+
+  /**
+   * Gets the public URL assigned by the proxy (available after connection)
+   * @returns {string | null} The public URL or null if not connected
+   */
+  getPublicUrl(): string | null {
+    return this.publicUrl
+  }
+
+  /**
+   * Gets the tunnel ID assigned by the proxy (available after connection)
+   * @returns {string | null} The tunnel ID or null if not connected
+   */
+  getTunnelId(): string | null {
+    return this.tunnelId
+  }
+
+  /**
+   * Stops the agent by closing the WebSocket connection.
+   *
+   * @returns {Promise<void>} Resolves when the connection is closed
+   */
+  async stop(): Promise<void> {
+    this.shouldReconnect = false
+    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+      this.ws.close()
+    }
+
+    // Close MCP clients
+    for (const client of Object.values<MCPClient<M>>(this.mcpClients)) {
+      try {
+        const protocolClient = client.getClient()
+        if (protocolClient && typeof protocolClient.disconnect === 'function') {
+          await protocolClient.disconnect()
+        }
+      } catch (error) {
+        logger.error({ error }, 'Error disconnecting MCP client')
+      }
+    }
   }
 
   /**
@@ -1121,13 +1340,5 @@ export class Agent<M extends string> {
         }
       })
     }
-  }
-}
-
-function convertToolToJsonSchema<M extends string>(tool: Capability<M, z.ZodTypeAny>) {
-  return {
-    name: tool.name,
-    description: tool.description,
-    schema: zodToJsonSchema(tool.schema)
   }
 }

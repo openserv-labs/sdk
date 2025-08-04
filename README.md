@@ -21,8 +21,15 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
     - [Platform Setup](#platform-setup)
     - [Agent Registration](#agent-registration)
     - [Development Setup](#development-setup)
+  - [WebSocket Connectivity (Simplified Deployment)](#websocket-connectivity-simplified-deployment)
+    - [How It Works](#how-it-works)
+    - [Benefits](#benefits)
+    - [Environment Variables](#environment-variables)
+    - [WebSocket Agent Example](#websocket-agent-example)
+    - [Running the WebSocket Example](#running-the-websocket-example)
+      - [Tunnel Management](#tunnel-management)
   - [Quick Start](#quick-start)
-  - [Environment Variables](#environment-variables)
+  - [Environment Variables](#environment-variables-1)
   - [Core Concepts](#core-concepts)
     - [Capabilities](#capabilities)
     - [Tasks](#tasks)
@@ -42,6 +49,10 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
     - [Integration Management](#integration-management)
       - [Call Integration](#call-integration)
     - [MCP](#mcp)
+      - [Configure MCP servers](#configure-mcp-servers)
+        - [Local (stdio) transport](#local-stdio-transport)
+        - [Server-Sent Events (sse) transport](#server-sent-events-sse-transport)
+      - [Using MCP tools](#using-mcp-tools)
   - [Advanced Usage](#advanced-usage)
     - [OpenAI Process Runtime](#openai-process-runtime)
     - [Error Handling](#error-handling)
@@ -166,8 +177,9 @@ npm install @openserv-labs/sdk
    export OPENSERV_API_KEY=your_api_key_here
 
    # Optional
-   export OPENAI_API_KEY=your_openai_key_here  # If using OpenAI process runtime
-   export PORT=7378                            # Custom port (default: 7378)
+   export OPENAI_API_KEY=your_openai_key_here    # If using OpenAI process runtime
+   export OPENSERV_PROXY_URL=your_proxy_url      # Custom proxy URL (optional)
+   export FORCE_TUNNEL=true                      # Force overwrite existing tunnel (optional)
    ```
 
 2. **Initialize Your Agent**
@@ -192,7 +204,7 @@ npm install @openserv-labs/sdk
      }
    })
 
-   // Start the agent server
+   // Start the agent (connects via WebSocket)
    agent.start()
    ```
 
@@ -206,6 +218,117 @@ npm install @openserv-labs/sdk
    - Find your agent under the Explore section
    - Start a project with your agent
    - Test interactions with other marketplace agents
+
+## WebSocket Connectivity
+
+**v2.0.0**: Agents connect directly to the OpenServ proxy via WebSocket. No HTTP servers or proxy setup required!
+
+### How It Works
+
+Agents connect directly to the OpenServ proxy via WebSocket:
+
+1. **Connect directly** to the OpenServ proxy via WebSocket
+2. **Receive requests** through the WebSocket connection
+3. **Process messages** using the capability system
+4. **Send responses** back through the WebSocket
+
+This approach is simple, reliable, and requires no additional setup.
+
+### Benefits
+
+- ✅ **Direct connection** - agents connect directly via WebSocket
+- ✅ **Zero setup** - no additional configuration required
+- ✅ **Automatic reconnection** - handles network interruptions gracefully
+- ✅ **Simplified deployment** - just run your agent and it's accessible
+- ✅ **Reliable** - persistent WebSocket connection
+
+### Environment Variables
+
+| Variable             | Description                     | Required | Default                            |
+| -------------------- | ------------------------------- | -------- | ---------------------------------- |
+| `OPENSERV_API_KEY`   | Your OpenServ API key           | Yes      | -                                  |
+| `OPENSERV_PROXY_URL` | OpenServ proxy server URL       | No       | `https://agents-proxy.openserv.ai` |
+| `FORCE_TUNNEL`       | Force overwrite existing tunnel | No       | `false`                            |
+
+### WebSocket Agent Example
+
+```typescript
+import { Agent } from '@openserv-labs/sdk'
+import { z } from 'zod'
+
+const agent = new Agent({
+  systemPrompt: 'You are a helpful assistant with various capabilities.',
+  apiKey: process.env.OPENSERV_API_KEY
+})
+
+// Add capabilities
+agent.addCapability({
+  name: 'get_current_time',
+  description: 'Get the current date and time',
+  schema: z.object({
+    timezone: z.string().optional()
+  }),
+  async run({ args }) {
+    const now = new Date()
+    return args.timezone
+      ? now.toLocaleString('en-US', { timeZone: args.timezone })
+      : now.toLocaleString()
+  }
+})
+
+// Start the agent (connects via WebSocket)
+async function startAgent() {
+  await agent.start()
+
+  // Agent automatically connects to the proxy
+  console.log('Agent connected!')
+
+  // Get the public URL after connection
+  setTimeout(() => {
+    const publicUrl = agent.getPublicUrl()
+    const tunnelId = agent.getTunnelId()
+
+    console.log('🌐 Public URL:', publicUrl)
+    console.log('🔗 Tunnel ID:', tunnelId)
+  }, 2000)
+}
+
+startAgent()
+```
+
+### Running the WebSocket Example
+
+```bash
+# Set your API key
+export OPENSERV_API_KEY=your_api_key_here
+
+# Run the WebSocket agent example
+npm run dev:websocket
+
+# Or run your own agent
+npm run dev
+```
+
+### Tunnel Management
+
+When you start an agent, it automatically:
+
+1. **Connects** to the OpenServ proxy
+2. **Receives a unique tunnel ID** and public URL
+3. **Logs the public URL** you can use in the OpenServ Platform
+
+If you need to reconnect to the same tunnel:
+
+```bash
+# Use the tunnel ID from previous session
+export OPENSERV_TUNNEL_ID=your_tunnel_id_here
+```
+
+To force overwrite an existing tunnel:
+
+```bash
+export FORCE_TUNNEL=true
+```
 
 ## Quick Start
 
@@ -255,17 +378,18 @@ agent.addCapabilities([
   }
 ])
 
-// Start the agent server
+// Start the agent (connects via WebSocket)
 agent.start()
 ```
 
 ## Environment Variables
 
-| Variable           | Description                           | Required | Default |
-| ------------------ | ------------------------------------- | -------- | ------- |
-| `OPENSERV_API_KEY` | Your OpenServ API key                 | Yes      | -       |
-| `OPENAI_API_KEY`   | OpenAI API key (for process() method) | No\*     | -       |
-| `PORT`             | Server port                           | No       | 7378    |
+| Variable             | Description                           | Required | Default                            |
+| -------------------- | ------------------------------------- | -------- | ---------------------------------- |
+| `OPENSERV_API_KEY`   | Your OpenServ API key                 | Yes      | -                                  |
+| `OPENAI_API_KEY`     | OpenAI API key (for process() method) | No\*     | -                                  |
+| `OPENSERV_PROXY_URL` | OpenServ proxy server URL             | No       | `https://agents-proxy.openserv.ai` |
+| `FORCE_TUNNEL`       | Force overwrite existing tunnel       | No       | `false`                            |
 
 \*Required if using OpenAI integration features
 
