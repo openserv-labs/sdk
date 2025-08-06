@@ -673,39 +673,6 @@ describe('Agent API Methods', () => {
 
     assert.deepStrictEqual(result, { result: 'test' })
   })
-
-  test('should handle root route with invalid action', async () => {
-    let handledError: Error | undefined
-    let handledContext: Record<string, unknown> | undefined
-
-    const agent = new Agent({
-      apiKey: mockApiKey,
-      systemPrompt: 'You are a test agent',
-      onError: (error, context) => {
-        handledError = error
-        handledContext = context
-      }
-    })
-
-    await agent.handleRootRoute({
-      body: {
-        type: 'invalid-action',
-        me: {
-          id: 1,
-          name: 'test-agent',
-          kind: 'external',
-          isBuiltByAgentBuilder: false
-        }
-      }
-    })
-
-    assert.ok(handledError instanceof z.ZodError)
-    const zodError = handledError as z.ZodError
-    assert.ok(zodError.issues[0].message.includes('Invalid discriminator value'))
-    assert.ok(zodError.issues[0].message.includes('do-task'))
-    assert.ok(zodError.issues[0].message.includes('respond-chat-message'))
-    assert.equal(handledContext?.context, 'handle_root_route')
-  })
 })
 
 describe('Agent Initialization', () => {

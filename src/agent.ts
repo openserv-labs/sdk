@@ -42,10 +42,11 @@ import type {
   UpdateTaskStatusResponse,
   MarkTaskAsErroredResponse,
   CompleteTaskResponse,
-  SendChatMessageResponse
+  SendChatMessageResponse,
+  ActionSchema,
+  DoTaskActionSchema,
+  RespondChatMessageActionSchema
 } from './types'
-import type { doTaskActionSchema, respondChatMessageActionSchema } from './types'
-import { actionSchema } from './types'
 import { BadRequest } from 'http-errors'
 import type {
   ChatCompletionMessageParam,
@@ -132,7 +133,7 @@ const authTokenMiddleware: Handler = async (req, res, next) => {
   next()
 }
 
-export class Agent<M extends string> {
+export class Agent<M extends string = string> {
   /**
    * The Express application instance used to handle HTTP requests.
    * This is initialized in the constructor and used to set up middleware and routes.
@@ -330,7 +331,7 @@ export class Agent<M extends string> {
    * @param {Function} capability.run - Function that implements the capability's behavior
    * @param {Object} capability.run.params - Parameters for the run function
    * @param {z.infer<S>} capability.run.params.args - Validated arguments matching the schema
-   * @param {z.infer<typeof actionSchema>} [capability.run.params.action] - Optional action context
+   * @param {ActionSchema} [capability.run.params.action] - Optional action context
    * @param {ChatCompletionMessageParam[]} capability.run.messages - Chat message history
    * @returns {this} The agent instance for method chaining
    * @throws {Error} If a capability with the same name already exists
@@ -346,7 +347,7 @@ export class Agent<M extends string> {
     schema: S
     run(
       this: Agent<M>,
-      params: { args: z.infer<S>; action?: z.infer<typeof actionSchema> },
+      params: { args: z.infer<S>; action?: ActionSchema },
       messages: ChatCompletionMessageParam[]
     ): string | Promise<string>
   }): this {
@@ -381,7 +382,7 @@ export class Agent<M extends string> {
       schema: T[K]
       run(
         this: Agent<M>,
-        params: { args: z.infer<T[K]>; action?: z.infer<typeof actionSchema> },
+        params: { args: z.infer<T[K]>; action?: ActionSchema },
         messages: ChatCompletionMessageParam[]
       ): string | Promise<string>
     }
@@ -814,7 +815,7 @@ export class Agent<M extends string> {
    * This method can be overridden by extending classes to customize task handling
    * @protected
    */
-  protected async doTask(action: z.infer<typeof doTaskActionSchema>) {
+  protected async doTask(action: DoTaskActionSchema) {
     const messages: ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -848,7 +849,7 @@ export class Agent<M extends string> {
    * This method can be overridden by extending classes to customize chat handling
    * @protected
    */
-  protected async respondToChat(action: z.infer<typeof respondChatMessageActionSchema>) {
+  protected async respondToChat(action: RespondChatMessageActionSchema) {
     const messages: ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -887,7 +888,7 @@ export class Agent<M extends string> {
    * @param {string} req.params.toolName - Name of the tool to execute
    * @param {Object} req.body - Request body
    * @param {z.infer<z.ZodTypeAny>} [req.body.args] - Arguments for the tool
-   * @param {z.infer<typeof actionSchema>} [req.body.action] - Action context
+   * @param {ActionSchema} [req.body.action] - Action context
    * @param {ChatCompletionMessageParam[]} [req.body.messages] - Message history
    * @returns {Promise<{result: string}>} The result of the tool execution
    * @throws {BadRequest} If tool name is missing or tool is not found
@@ -897,7 +898,7 @@ export class Agent<M extends string> {
     params: { toolName: string }
     body: {
       args?: z.infer<z.ZodTypeAny>
-      action?: z.infer<typeof actionSchema>
+      action?: ActionSchema
       messages?: ChatCompletionMessageParam[]
     }
   }) {
@@ -935,7 +936,7 @@ export class Agent<M extends string> {
    */
   async handleRootRoute(req: { body: unknown }) {
     try {
-      const action = await actionSchema.parseAsync(req.body)
+      const action = req.body as ActionSchema
       if (action.type === 'do-task') {
         this.doTask(action)
       } else if (action.type === 'respond-chat-message') {

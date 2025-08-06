@@ -21,11 +21,3 @@ export type {
   CapabilityFuncParams,
   GetChatMessagesParams
 } from './types'
-
-export {
-  actionSchema,
-  doTaskActionSchema,
-  respondChatMessageActionSchema,
-  taskStatusSchema,
-  agentKind
-} from './types'
