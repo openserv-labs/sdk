@@ -1,390 +1,281 @@
-import { z } from 'zod'
-import { extendZodWithOpenApi } from '@asteasolutions/zod-to-openapi'
+import type { z } from 'zod'
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions'
-
-extendZodWithOpenApi(z)
 
 // Helper type for capability function parameters
 export type CapabilityFuncParams<Schema extends z.ZodTypeAny> = {
   args: z.infer<Schema>
-  action?: z.infer<typeof actionSchema>
+  action?: ActionSchema
 }
 
-export const agentKind = z.enum(['external', 'eliza', 'openserv'])
+export type AgentKind = 'external' | 'eliza' | 'openserv'
 
-export const taskStatusSchema = z
-  .enum(['to-do', 'in-progress', 'human-assistance-required', 'error', 'done', 'cancelled'])
-  .openapi('taskStatusSchema')
+export type TaskStatus =
+  | 'to-do'
+  | 'in-progress'
+  | 'human-assistance-required'
+  | 'error'
+  | 'done'
+  | 'cancelled'
 
-export type TaskStatus = z.infer<typeof taskStatusSchema>
+type JSONArtifact = {
+  id: string
+  type: 'json'
+  data: Record<string, unknown>
+}
 
-const triggerEventPayloadWithSummarySchema = z.object({
-  event: z.unknown(),
-  summary: z.string()
-})
+type IntegrationType = 'nango' | 'custom' | 'internal'
 
-export const chatMessageArtifacts = z.array(
-  z.intersection(
-    z.object({
-      id: z.string()
-    }),
-    z.discriminatedUnion('type', [
-      z
-        .object({
-          type: z.literal('json'),
-          data: z.record(z.string(), z.unknown())
-        })
-        .openapi({
-          description:
-            "type is 'json' and the data is a JSON object. This is what your agents will typically use."
-        }),
-      z
-        .object({
-          type: z.literal('artifact-card'),
-          data: z.unknown()
-        })
-        .openapi({
-          description:
-            "type is 'artifact-card' and the data is a JSON object. This is what your users will typically use to respond to the agent's artifact."
-        }),
-      z
-        .object({
-          type: z.literal('artifact-card-response'),
-          artifactId: z.string(),
-          data: z.unknown().nullish()
-        })
-        .openapi({
-          description:
-            "type is 'artifact-card-response' and the artifactId is the id of the artifact that the user responded to."
-        })
-    ])
-  )
-)
+type IntegrationConnectionSchema = {
+  id: string
+  type: IntegrationType
+  identifier: string
+  name: string
+  description: string
+  scopes: string[]
+  connectionName: string
+}
 
-export const chatMessageParts = z.object({
-  artifacts: chatMessageArtifacts
-})
+type MCPToolSchema = {
+  name: string
+  description: string | null
+  inputSchema: unknown
+}
 
-const integrationConnectionSchema = z.object({
-  id: z.string(),
-  type: z.enum(['nango', 'custom', 'internal']),
-  identifier: z.string(),
-  name: z.string(),
-  description: z.string(),
-  scopes: z.array(z.string()),
-  connectionName: z.string()
-})
+type MCPServerSchema = {
+  id: string
+  name: string
+  description?: string | null
+  url: string
+  headers?: Record<string, string> | null
+  transport: 'http' | 'sse'
+  tools: MCPToolSchema[]
+}
 
-const mcpServersSchema = z.array(
-  z.object({
-    id: z.string(),
-    name: z.string(),
-    description: z.string().nullish(),
-    url: z.string(),
-    headers: z.record(z.string(), z.string()).nullish(),
-    transport: z.enum(['http', 'sse']),
-    tools: z.array(
-      z.object({
-        name: z.string(),
-        description: z.string().nullish(),
-        inputSchema: z.any()
-      })
-    )
-  })
-)
+type ProjectManagerPlanReviewTask = {
+  index: number
+  assigneeAgentId: number
+  assigneeAgentName: string
+  taskDescription: string
+  taskBody: string
+  input: string
+  expectedOutput: string
+}
 
-const projectManagerPlanReviewHumanAssistanceQuestionSchema = z.object({
-  tasks: z.array(
-    z.object({
-      index: z.number(),
-      assigneeAgentId: z.number().int(),
-      assigneeAgentName: z.string(),
-      taskDescription: z.string(),
-      taskBody: z.string(),
-      input: z.string(),
-      expectedOutput: z.string()
-    })
-  )
-})
+type ProjectManagerPlanReviewHumanAssistanceQuestion = {
+  tasks: ProjectManagerPlanReviewTask[]
+}
 
-const baseHumanAssistanceRequestSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      type: z.literal('text'),
-      question: z.object({
-        type: z.literal('text'),
-        question: z.string().trim().min(1).openapi({ description: 'Your question for the user' })
-      })
-    })
-    .openapi({
-      description:
-        "The type is 'text' and the question is a known object. This is what your agents will typically use."
-    }),
-  z.object({
-    type: z.literal('project-manager-plan-review'),
-    question: projectManagerPlanReviewHumanAssistanceQuestionSchema.extend({
-      type: z.literal('project-manager-plan-review')
-    })
-  }),
-  z.object({
-    type: z.literal('insufficient-balance'),
-    question: z.object({
-      type: z.literal('insufficient-balance')
-    })
-  }),
-  z.object({
-    type: z.literal('json'),
-    question: z.any()
-  })
-])
+type TextHumanAssistanceRequest = {
+  type: 'text'
+  question: {
+    type: 'text'
+    question: string
+  }
+}
 
-export const doTaskActionSchema = z
-  .object({
-    type: z.literal('do-task'),
-    workspaceUpdateToken: z.string().nullish(),
-    taskUpdateToken: z.string().nullish(),
-    explicitInput: z.unknown().nullish(),
-    triggerEvents: z.array(
-      z.object({
-        name: z.string(),
-        description: z.string().nullish(),
-        integrationName: z.string().nullish(),
-        integrationType: z.enum(['nango', 'custom', 'internal']),
-        trigger_name: z.string().nullish(),
-        payload: z.array(triggerEventPayloadWithSummarySchema)
-      })
-    ),
-    sessionHistory: z
-      .array(
-        z.object({
-          tasks: z.array(
-            z.object({
-              id: z.number().openapi({ description: 'The ID of the task' }),
-              description: z.string().openapi({
-                description:
-                  "Short description of the task. Usually in the format of 'Do [something]'"
-              }),
-              body: z.string().nullish().openapi({
-                description:
-                  'Additional task information or data. Usually 2-3 sentences if available.'
-              }),
-              expectedOutput: z
-                .string()
-                .nullish()
-                .openapi({ description: 'Preferred output of the task' }),
-              input: z.string().nullish().openapi({
-                description:
-                  "The input information for the task. Typically, it's an output of another task."
-              }),
-              output: z.string().nullish().openapi({
-                description: 'The output of the task. This is the result of the task.'
-              })
-            })
-          ),
-          triggerEvents: z
-            .array(
-              z.object({
-                name: z.string(),
-                description: z.string().nullish(),
-                integrationName: z.string().nullish(),
-                integrationType: z.enum(['nango', 'custom', 'internal']),
-                trigger_name: z.string().nullish(),
-                payload: z.array(triggerEventPayloadWithSummarySchema)
-              })
-            )
-            .openapi({
-              description:
-                'The optional payload of the trigger that triggered the task execution for a session'
-            })
-        })
-      )
-      .optional()
-      .openapi({
-        description:
-          'The optional payload of the trigger that triggered the task execution for a session'
-      }),
-    me: z
-      .intersection(
-        z.object({
-          id: z.number(),
-          name: z.string(),
-          kind: agentKind
-        }),
-        z
-          .union([
-            z.object({
-              isBuiltByAgentBuilder: z.literal(false)
-            }),
-            z.object({
-              isBuiltByAgentBuilder: z.literal(true),
-              systemPrompt: z.string()
-            })
-          ])
-          .openapi({
-            description: 'This information is for internal agents only'
-          })
-      )
-      .openapi({ description: 'Your agent instance' }),
-    task: z.object({
-      id: z.union([z.number(), z.string()]).openapi({ description: 'The ID of the task' }),
-      description: z.string().openapi({
-        description: "Short description of the task. Usually in the format of 'Do [something]'"
-      }),
-      body: z.string().nullish().openapi({
-        description: 'Additional task information or data. Usually 2-3 sentences if available.'
-      }),
-      expectedOutput: z.string().nullish().openapi({ description: 'Preferred output of the task' }),
-      input: z.string().nullish().openapi({
-        description:
-          "The input information for the task. Typically, it's an output of another task."
-      }),
-      dependencies: z
-        .array(
-          z.object({
-            id: z.number(),
-            description: z.string(),
-            output: z.string().nullish(),
-            status: taskStatusSchema,
-            attachments: z.array(
-              z.object({
-                id: z.number(),
-                path: z.string(),
-                fullUrl: z.string(),
-                summary: z.string().nullish()
-              })
-            )
-          })
-        )
-        .openapi({ description: 'List of dependant tasks' }),
-      humanAssistanceRequests: z.array(
-        z.intersection(
-          baseHumanAssistanceRequestSchema,
-          z
-            .object({
-              agentDump: z.unknown().openapi({
-                description:
-                  "Agent's internal data. Anything the agent wanted to store in the context of this human assistant request."
-              }),
-              humanResponse: z
-                .string()
-                .nullish()
-                .openapi({ description: "Human's response to the question" }),
-              id: z.number(),
-              status: z.enum(['pending', 'responded'])
-            })
-            .openapi({ description: 'List of Human Assistance Requests' })
-        )
-      ),
-      triggerEvent: z
-        .object({
-          name: z.string(),
-          description: z.string().nullish(),
-          integrationName: z.string().nullish(),
-          integrationType: z.enum(['nango', 'custom', 'internal']),
-          trigger_name: z.string().nullish(),
-          payload: z.array(triggerEventPayloadWithSummarySchema)
-        })
-        .optional()
-        .openapi({
-          description: 'The optional payload of the trigger that triggered the task execution'
-        })
-    }),
+type ProjectManagerPlanReviewHumanAssistanceRequest = {
+  type: 'project-manager-plan-review'
+  question: ProjectManagerPlanReviewHumanAssistanceQuestion & {
+    type: 'project-manager-plan-review'
+  }
+}
 
-    workspace: z.object({
-      id: z.union([z.number(), z.string()]),
-      goal: z.string(),
-      bucket_folder: z.string(),
-      latest_workspace_execution_status: z
-        .enum(['error', 'active', 'deleted', 'idle', 'running', 'paused', 'completed', 'timed-out'])
-        .optional(),
-      agents: z.array(
-        z.object({
-          id: z.number(),
-          name: z.string(),
-          capabilities_description: z.string(),
-          integrations: z.array(integrationConnectionSchema).optional()
-        })
-      )
-    }),
-    workspaceExecutionId: z.number().optional(),
-    integrations: z.array(integrationConnectionSchema),
-    mcpServers: mcpServersSchema.optional(),
-    agentKnowledgeFiles: z
-      .array(
-        z.object({
-          id: z.number(),
-          path: z.string(),
-          state: z.enum(['pending', 'processing', 'processed', 'error', 'skipped'])
-        })
-      )
-      .optional(),
-    memories: z.array(
-      z.object({
-        id: z.number(),
-        memory: z.string(),
-        createdAt: z.coerce.date()
-      })
-    )
-  })
-  .openapi('doTaskActionSchema')
+type InsufficientBalanceHumanAssistanceRequest = {
+  type: 'insufficient-balance'
+  question: {
+    type: 'insufficient-balance'
+  }
+}
 
-export const respondChatMessageActionSchema = z
-  .object({
-    type: z.literal('respond-chat-message'),
-    workspaceUpdateToken: z.string().nullish(),
-    me: z.intersection(
-      z.object({ id: z.number(), name: z.string(), kind: agentKind }),
-      z.discriminatedUnion('isBuiltByAgentBuilder', [
-        z.object({ isBuiltByAgentBuilder: z.literal(false) }),
-        z.object({ isBuiltByAgentBuilder: z.literal(true), systemPrompt: z.string() })
-      ])
-    ),
-    messages: z.array(
-      z.object({
-        author: z.enum(['agent', 'user']),
-        createdAt: z.coerce.date(),
-        id: z.number(),
-        message: z.string(),
-        parts: chatMessageParts.optional().default({ artifacts: [] })
-      })
-    ),
-    workspace: z.object({
-      id: z.union([z.number(), z.string()]),
-      goal: z.string(),
-      bucket_folder: z.string(),
-      latest_workspace_execution_status: z
-        .enum(['error', 'active', 'deleted', 'idle', 'running', 'paused', 'completed', 'timed-out'])
-        .optional(),
-      agents: z.array(
-        z.object({ id: z.number(), name: z.string(), capabilities_description: z.string() })
-      )
-    }),
-    integrations: z.array(integrationConnectionSchema),
-    memories: z.array(z.object({ id: z.number(), memory: z.string(), createdAt: z.coerce.date() }))
-  })
-  .openapi('respondChatMessageActionSchema')
+type JSONHumanAssistanceRequest = {
+  type: 'json'
+  question: {
+    type: 'json'
+    question: unknown
+  }
+}
 
-export const actionSchema = z.discriminatedUnion('type', [
-  doTaskActionSchema,
-  respondChatMessageActionSchema
-])
+type HumanAssistanceRequest =
+  | TextHumanAssistanceRequest
+  | ProjectManagerPlanReviewHumanAssistanceRequest
+  | InsufficientBalanceHumanAssistanceRequest
+  | JSONHumanAssistanceRequest
 
-const agentChatMessagesResponseSchema = z.object({
-  agent: z.object({
-    id: z.number(),
-    name: z.string()
-  }),
-  messages: z.array(
-    z.object({
-      author: z.enum(['agent', 'user']),
-      createdAt: z.coerce.date(),
-      id: z.number(),
-      message: z.string()
-    })
-  )
-})
+type TriggerEvent = {
+  name: string
+  description?: string | null
+  integrationName?: string | null
+  integrationType: IntegrationType
+  trigger_name?: string | null
+  payload: {
+    event: unknown
+    summary: string
+  }[]
+}
 
-export type AgentChatMessagesResponse = z.infer<typeof agentChatMessagesResponseSchema>
+type TaskDependency = {
+  id: number | string
+  description: string
+  output?: string | null
+  status: TaskStatus
+  attachments: {
+    id: string
+    path: string
+    fullUrl: string
+    summary?: string | null
+  }[]
+}
+
+type WorkspaceAgent = {
+  id: number
+  name: string
+  capabilities_description: string
+  integrations?: IntegrationConnectionSchema[]
+}
+
+type ExecutionStatus =
+  | 'error'
+  | 'active'
+  | 'deleted'
+  | 'idle'
+  | 'running'
+  | 'paused'
+  | 'completed'
+  | 'timed-out'
+
+type ActionWorkspace = {
+  id: number | string
+  goal: string
+  bucket_folder: string
+  latest_workspace_execution_status?: ExecutionStatus
+  agents: WorkspaceAgent[]
+}
+
+type NoCodeActionAssignee = {
+  id: number
+  name: string
+  kind: AgentKind
+  isBuiltByAgentBuilder: true
+  systemPrompt: string
+}
+
+type CustomActionAssignee = {
+  id: number
+  name: string
+  kind: AgentKind
+  isBuiltByAgentBuilder: false
+}
+
+type ActionAssignee = NoCodeActionAssignee | CustomActionAssignee
+
+type Memory = {
+  id: number
+  memory: string
+  createdAt: string | Date
+}
+
+type SessionHistoryTask = {
+  id: number
+  description: string
+  body?: string | null
+  expectedOutput?: string | null
+  input?: string | null
+  output?: string | null
+}
+
+type SessionHistoryItem = {
+  tasks: SessionHistoryTask[]
+  triggerEvents: TriggerEvent[]
+}
+
+type AgentKnowledgeFile = {
+  id: number
+  path: string
+  state: 'pending' | 'processing' | 'processed' | 'error' | 'skipped'
+}
+
+export type DoTaskActionSchema = {
+  type: 'do-task'
+  workspaceUpdateToken?: string | null
+  taskUpdateToken?: string | null
+  explicitInput?: unknown | null
+  triggerEvents?: TriggerEvent[]
+  sessionHistory?: SessionHistoryItem[]
+  me: ActionAssignee
+  task: {
+    id: number | string
+    description: string
+    body?: string | null
+    expectedOutput?: string | null
+    input?: string | null
+    dependencies: TaskDependency[]
+    humanAssistanceRequests: (HumanAssistanceRequest & {
+      agentDump: unknown
+      humanResponse?: string | null
+      id: number
+      status: 'pending' | 'responded'
+    })[]
+    triggerEvent?: TriggerEvent | null
+  }
+  workspace: ActionWorkspace
+  workspaceExecutionId?: number
+  integrations: IntegrationConnectionSchema[]
+  mcpServers?: MCPServerSchema[]
+  agentKnowledgeFiles?: AgentKnowledgeFile[]
+  memories: Memory[]
+}
+
+type ArtifactCard = {
+  id: string
+  type: 'artifact-card'
+  data: unknown
+}
+
+type ArtifactCardResponse = {
+  id: string
+  type: 'artifact-card-response'
+  artifactId: string
+  data: unknown | null
+}
+
+type ChatMessageArtifact = JSONArtifact | ArtifactCard | ArtifactCardResponse
+
+type ChatMessageParts = {
+  artifacts: ChatMessageArtifact[]
+}
+
+type ChatMessage = {
+  author: 'agent' | 'user'
+  createdAt: string | Date
+  id: number
+  message: string
+  parts: ChatMessageParts
+}
+
+export type RespondChatMessageActionSchema = {
+  type: 'respond-chat-message'
+  workspaceUpdateToken?: string | null
+  me: ActionAssignee
+  messages: ChatMessage[]
+  workspace: ActionWorkspace
+  integrations: IntegrationConnectionSchema[]
+  memories: Memory[]
+}
+
+export type ActionSchema = DoTaskActionSchema | RespondChatMessageActionSchema
+
+export type AgentChatMessagesResponse = {
+  agent: {
+    id: number
+    name: string
+  }
+  messages: {
+    author: 'agent' | 'user'
+    createdAt: Date
+    id: number
+    message: string
+  }[]
+}
 
 type WorkspaceId = string | number
 type TaskId = string | number

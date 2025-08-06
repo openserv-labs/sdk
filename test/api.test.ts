@@ -2,17 +2,16 @@ import { describe, test } from 'node:test'
 import assert from 'node:assert/strict'
 import { Agent } from '../src/agent'
 import type OpenAI from 'openai'
-import type { doTaskActionSchema, respondChatMessageActionSchema } from '../src/types'
-import type { z } from 'zod'
 import { BadRequest as BadRequestError } from 'http-errors'
+import type { DoTaskActionSchema, RespondChatMessageActionSchema } from '../src/types'
 
 // Create a test class that exposes protected methods for testing
 class TestAgent extends Agent {
-  public async testDoTask(action: z.infer<typeof doTaskActionSchema>) {
+  public async testDoTask(action: DoTaskActionSchema) {
     return this.doTask(action)
   }
 
-  public async testRespondToChat(action: z.infer<typeof respondChatMessageActionSchema>) {
+  public async testRespondToChat(action: RespondChatMessageActionSchema) {
     return this.respondToChat(action)
   }
 
