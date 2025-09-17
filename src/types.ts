@@ -417,7 +417,7 @@ export interface CreateTaskParams {
   body: string
   input: string
   expectedOutput: string
-  dependencies: number[]
+  dependencies: number[] | string[]
 }
 
 export type CreateTaskResponse = {
