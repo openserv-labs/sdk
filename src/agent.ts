@@ -286,7 +286,7 @@ export class Agent<M extends string = string> {
       }
     })
 
-    this.app.use(express.json())
+    this.app.use(express.json({ limit: '10mb' }))
     this.app.use(express.urlencoded({ extended: false }))
     this.app.use(hpp())
     this.app.use(helmet())
