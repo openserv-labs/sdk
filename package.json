@@ -1,6 +1,6 @@
 {
   "name": "@openserv-labs/sdk",
-  "version": "1.8.2",
+  "version": "2.0.0",
   "description": "OpenServ Agent SDK - Create AI agents easily",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
