@@ -181,7 +181,16 @@ export class Agent<M extends string = string> {
    * Can be provided in options or via OPENSERV_API_KEY environment variable.
    * @private
    */
-  private apiKey: string
+  private _apiKey: string
+
+  /**
+   * Gets the OpenServ API key for this agent instance.
+   * Used by run() to pass the correct key to the tunnel.
+   * @returns The API key for this agent
+   */
+  get apiKey(): string {
+    return this._apiKey
+  }
 
   /**
    * Axios instance for making requests to the OpenServ API.
@@ -260,9 +269,9 @@ export class Agent<M extends string = string> {
     this.router = AsyncRouter()
     this.port = this.options.port || DEFAULT_PORT
     this.systemPrompt = this.options.systemPrompt
-    this.apiKey = this.options.apiKey || process.env.OPENSERV_API_KEY || ''
+    this._apiKey = this.options.apiKey || process.env.OPENSERV_API_KEY || ''
 
-    if (!this.apiKey) {
+    if (!this._apiKey) {
       throw new Error(
         'OpenServ API key is required. Please provide it in options or set OPENSERV_API_KEY environment variable.'
       )

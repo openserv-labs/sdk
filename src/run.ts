@@ -73,6 +73,9 @@ export async function run(agent: Agent, options?: RunOptions): Promise<RunResult
 
   const tunnel = new OpenServTunnel({
     ...options?.tunnel,
+    // Always use the agent's API key to ensure tunnel authenticates as the correct agent
+    // This prevents issues when running multiple agents with different API keys
+    apiKey: agent.apiKey,
     onConnected: isReconnect => {
       if (!isReconnect) {
         logger.info('Agent connected to OpenServ proxy')
