@@ -1598,14 +1598,27 @@ describe('Agent MCP Integration', () => {
 
     agent.mcpClients['no-auto-server'] = mockMcpClient as any
     const mockServer = {
-      on: () => {},
-      close: (callback: () => void) => callback()
+      listeners: {} as Record<string, ((...args: unknown[]) => void)[]>,
+      on(event: string, handler: (...args: unknown[]) => void) {
+        if (!this.listeners[event]) this.listeners[event] = []
+        this.listeners[event].push(handler)
+        // Emit 'listening' event asynchronously like real Node.js listen
+        if (event === 'listening') {
+          setImmediate(() => handler())
+        }
+      },
+      removeListener(event: string, handler: (...args: unknown[]) => void) {
+        if (this.listeners[event]) {
+          this.listeners[event] = this.listeners[event].filter(h => h !== handler)
+        }
+      },
+      close: (callback: () => void) => callback(),
+      address: () => ({ port: 7378 })
     }
 
     Object.defineProperty(agent, 'app', {
       value: {
-        listen: (port: number, callback: () => void) => {
-          callback()
+        listen: () => {
           return mockServer
         }
       },

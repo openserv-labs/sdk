@@ -158,9 +158,9 @@ export class Agent<M extends string = string> {
   /**
    * The port number the server will listen on.
    * Defaults to DEFAULT_PORT (7378) if not specified in options.
-   * @private
+   * May change if the preferred port is unavailable.
    */
-  private port: number
+  public port: number
 
   /**
    * The system prompt used for OpenAI chat completions.
@@ -980,17 +980,58 @@ export class Agent<M extends string = string> {
 
   /**
    * Starts the agent's HTTP server.
+   * If the preferred port is unavailable, it will find an open port.
    *
    * @returns {Promise<void>} Resolves when the server has started
    * @throws {Error} If server fails to start
    */
   async start(): Promise<void> {
+    const preferredPort = this.port
+
+    // Try the preferred port first, fallback to an available port if it fails
     await new Promise<void>((resolve, reject) => {
-      this.server = this.app.listen(this.port, () => {
-        logger.info(`Agent server started on port ${this.port}`)
-        resolve()
-      })
-      this.server.on('error', reject)
+      const tryListen = (port: number, isRetry: boolean) => {
+        const server = this.app.listen(port)
+
+        const onListening = () => {
+          // Remove the startup handlers once listening succeeds
+          server.removeListener('error', errorHandler)
+          server.removeListener('listening', onListening)
+          if (isRetry) {
+            const address = server.address()
+            if (address && typeof address === 'object') {
+              this.port = address.port
+              logger.info(`Port ${preferredPort} was unavailable, using port ${this.port} instead`)
+            }
+          } else {
+            logger.info(`Agent server started on port ${this.port}`)
+          }
+          this.server = server
+          resolve()
+        }
+
+        const errorHandler = (err: NodeJS.ErrnoException) => {
+          // Clean up the failed server before handling the error
+          server.removeListener('error', errorHandler)
+          server.removeListener('listening', onListening)
+
+          // Close the failed server to release resources
+          server.close()
+
+          if (err.code === 'EADDRINUSE' && !isRetry) {
+            logger.warn(`Port ${this.port} is in use, finding an available port...`)
+            // Let the OS assign an available port
+            tryListen(0, true)
+          } else {
+            reject(err)
+          }
+        }
+
+        server.on('listening', onListening)
+        server.on('error', errorHandler)
+      }
+
+      tryListen(this.port, false)
     })
 
     const connectionPromises = Object.values<MCPClient<M>>(this.mcpClients).map(client =>

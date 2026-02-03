@@ -39,10 +39,19 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
     - [Workspace Management](#workspace-management)
       - [Get Files](#get-files)
       - [Upload File](#upload-file)
+      - [Delete File](#delete-file)
+    - [Secrets Management](#secrets-management)
+      - [Get Secrets](#get-secrets)
+      - [Get Secret Value](#get-secret-value)
     - [Integration Management](#integration-management)
       - [Call Integration](#call-integration)
     - [MCP](#mcp)
+      - [Configure MCP servers](#configure-mcp-servers)
+        - [Local (stdio) transport](#local-stdio-transport)
+        - [Server-Sent Events (sse) transport](#server-sent-events-sse-transport)
+      - [Using MCP tools](#using-mcp-tools)
   - [Advanced Usage](#advanced-usage)
+    - [Local Development with Tunnel](#local-development-with-tunnel)
     - [OpenAI Process Runtime](#openai-process-runtime)
     - [Error Handling](#error-handling)
     - [Custom Agents](#custom-agents)
@@ -64,6 +73,7 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
 - 📝 Strong TypeScript typing with Zod schemas
 - 📊 Built-in logging and error handling
 - 🎯 Three levels of control for different development needs
+- 🚇 Built-in tunnel for local development and testing
 
 ## Framework Architecture
 
@@ -257,15 +267,21 @@ agent.addCapabilities([
 
 // Start the agent server
 agent.start()
+
+// Or use run() for local development with automatic tunnel management
+// import { run } from '@openserv-labs/sdk'
+// const { stop } = await run(agent)
 ```
 
 ## Environment Variables
 
-| Variable           | Description                           | Required | Default |
-| ------------------ | ------------------------------------- | -------- | ------- |
-| `OPENSERV_API_KEY` | Your OpenServ API key                 | Yes      | -       |
-| `OPENAI_API_KEY`   | OpenAI API key (for process() method) | No\*     | -       |
-| `PORT`             | Server port                           | No       | 7378    |
+| Variable              | Description                                | Required | Default                            |
+| --------------------- | ------------------------------------------ | -------- | ---------------------------------- |
+| `OPENSERV_API_KEY`    | Your OpenServ API key                      | Yes      | -                                  |
+| `OPENAI_API_KEY`      | OpenAI API key (for process() method)      | No\*     | -                                  |
+| `PORT`                | Server port                                | No       | 7378                               |
+| `OPENSERV_AUTH_TOKEN` | Token for authenticating incoming requests | No       | -                                  |
+| `OPENSERV_PROXY_URL`  | Custom proxy URL for tunnel connections    | No       | `https://agents-proxy.openserv.ai` |
 
 \*Required if using OpenAI integration features
 
@@ -528,6 +544,61 @@ await agent.uploadFile({
 })
 ```
 
+#### Delete File
+
+```typescript
+await agent.deleteFile({
+  workspaceId: number | string,
+  fileId: number
+})
+```
+
+### Secrets Management
+
+Agents can securely access secrets configured in their workspace. Secrets are managed through the OpenServ platform.
+
+#### Get Secrets
+
+Returns a list of all secrets available to the agent in a workspace.
+
+```typescript
+const secrets = await agent.getSecrets({
+  workspaceId: number | string
+})
+// Returns: { id: number, name: string }[]
+```
+
+#### Get Secret Value
+
+Retrieves the actual value of a specific secret.
+
+```typescript
+const value = await agent.getSecretValue({
+  workspaceId: number | string,
+  secretId: number
+})
+// Returns: string
+```
+
+**Example:**
+
+```typescript
+// Get all available secrets
+const secrets = await agent.getSecrets({ workspaceId: 123 })
+
+// Find a specific secret by name
+const apiKeySecret = secrets.find(s => s.name === 'EXTERNAL_API_KEY')
+
+if (apiKeySecret) {
+  // Retrieve the secret value
+  const apiKey = await agent.getSecretValue({
+    workspaceId: 123,
+    secretId: apiKeySecret.id
+  })
+  // Use the secret value securely
+}
+```
+
 ### Integration Management
 
 #### Call Integration
@@ -632,6 +703,87 @@ If `autoRegisterTools` is `true`, each MCP tool becomes a capability named `mcp_
 You can also access the raw MCP client via `agent.mcpClients['MCP_SERVER_ID']` to list tools (`getTools`) or execute them directly (`executeTool`) inside your agents own capabilities.
 
 ## Advanced Usage
+
+### Local Development with Tunnel
+
+The SDK provides a convenient `run()` function that handles starting your agent and establishing a secure tunnel connection to the OpenServ platform. This is ideal for local development and testing.
+
+```typescript
+import { Agent, run } from '@openserv-labs/sdk'
+import { z } from 'zod'
+
+const agent = new Agent({
+  systemPrompt: 'You are a helpful assistant.'
+})
+
+agent.addCapability({
+  name: 'greet',
+  description: 'Greet someone',
+  schema: z.object({ name: z.string() }),
+  async run({ args }) {
+    return `Hello, ${args.name}!`
+  }
+})
+
+// Start the agent with automatic tunnel management
+const { tunnel, stop } = await run(agent)
+
+// The agent is now connected to OpenServ and ready to receive tasks
+
+// To gracefully stop the agent and tunnel:
+await stop()
+```
+
+The `run()` function automatically:
+
+- Starts the agent's HTTP server
+- Creates a WebSocket tunnel to the OpenServ proxy
+- Handles reconnection with exponential backoff
+- Registers signal handlers for graceful shutdown (SIGTERM, SIGINT)
+
+**Configuration options:**
+
+```typescript
+const { tunnel, stop } = await run(agent, {
+  // Tunnel-specific options
+  tunnel: {
+    apiKey: 'your-api-key', // Defaults to OPENSERV_API_KEY env var
+    proxyUrl: 'custom-proxy-url' // Defaults to OPENSERV_PROXY_URL env var
+  },
+  // Disable automatic signal handlers if you want to handle shutdown yourself
+  handleSignals: false
+})
+```
+
+**Using the tunnel directly:**
+
+For more advanced control, you can use the `OpenServTunnel` class directly:
+
+```typescript
+import { Agent, OpenServTunnel } from '@openserv-labs/sdk'
+
+const agent = new Agent({
+  systemPrompt: 'You are a helpful assistant.'
+})
+
+await agent.start()
+
+const tunnel = new OpenServTunnel({
+  apiKey: process.env.OPENSERV_API_KEY,
+  onConnected: isReconnect => {
+    console.log(isReconnect ? 'Reconnected!' : 'Connected!')
+  },
+  onError: error => {
+    console.error('Tunnel error:', error.message)
+  }
+})
+
+await tunnel.start(agent.port)
+
+// Later, to stop:
+await tunnel.stop()
+await agent.stop()
+```
 
 ### OpenAI Process Runtime
 

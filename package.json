@@ -10,6 +10,7 @@
     "dev:example": "ts-node-dev --respawn --transpile-only examples/marketing-agent.ts",
     "dev:twitter": "ts-node-dev --respawn --transpile-only examples/twitter-agent.ts",
     "dev:custom-agent": "ts-node-dev --respawn --transpile-only examples/custom-agent.ts",
+    "dev:haiku": "ts-node-dev --respawn --transpile-only examples/haiku-agent.ts",
     "check-types": "tsc --noEmit",
     "prepublishOnly": "npm run build && npm run lint && npm run check-types && npm run test",
     "prepare": "npm run build",
@@ -54,6 +55,7 @@
     "hpp": "^0.2.3",
     "http-errors": "^2.0.0",
     "pino": "^9.6.0",
+    "ws": "^8.18.0",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.22.4"
   },
@@ -64,6 +66,7 @@
     "@types/helmet": "^0.0.48",
     "@types/hpp": "^0.2.6",
     "@types/node": "^22.10.2",
+    "@types/ws": "^8.5.13",
     "@typescript-eslint/eslint-plugin": "^7.3.1",
     "@typescript-eslint/parser": "^7.3.1",
     "dotenv": "^16.4.5",
