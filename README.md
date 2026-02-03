@@ -6,9 +6,42 @@
 
 A powerful TypeScript framework for building non-deterministic AI agents with advanced cognitive capabilities like reasoning, decision-making, and inter-agent collaboration within the OpenServ platform. Built with strong typing, extensible architecture, and a fully autonomous agent runtime.
 
+## What's New in v2
+
+Version 2.0.0 introduces built-in tunnel support for local development, eliminating the need to deploy your agent to test it with the OpenServ platform.
+
+### Key Changes
+
+- **Built-in Tunnel for Local Development** - New `run()` function and `OpenServTunnel` class create a secure WebSocket connection to OpenServ, allowing you to develop and test locally without deploying. No need to configure an Agent Endpoint URL during development.
+- **Automatic Port Fallback** - If your preferred port is busy, the agent automatically finds an available port instead of failing.
+- **Secrets Management** - New `getSecrets()` and `getSecretValue()` methods allow agents to securely access workspace secrets.
+- **Delete File Support** - New `deleteFile()` method for workspace file management.
+- **Increased Request Size Limit** - Body parser limit increased to 10MB for larger payloads.
+- **Enhanced Logging** - Added pino-pretty for more readable log output during development.
+
+### Migration from v1.x
+
+The v2 API is backwards compatible. To take advantage of the new tunnel feature for local development, simply replace:
+
+```typescript
+// v1.x - Required deploying to a public URL
+agent.start()
+```
+
+With:
+
+```typescript
+// v2.x - Works locally without deployment
+import { run } from '@openserv-labs/sdk'
+const { stop } = await run(agent)
+```
+
 ## Table of Contents
 
 - [OpenServ TypeScript SDK, Autonomous AI Agent Development Framework](#openserv-typescript-sdk-autonomous-ai-agent-development-framework)
+  - [What's New in v2](#whats-new-in-v2)
+    - [Key Changes](#key-changes)
+    - [Migration from v1.x](#migration-from-v1x)
   - [Table of Contents](#table-of-contents)
   - [Features](#features)
   - [Framework Architecture](#framework-architecture)
@@ -52,6 +85,11 @@ A powerful TypeScript framework for building non-deterministic AI agents with ad
       - [Using MCP tools](#using-mcp-tools)
   - [Advanced Usage](#advanced-usage)
     - [Local Development with Tunnel](#local-development-with-tunnel)
+      - [How It Works](#how-it-works)
+      - [Quick Start](#quick-start-1)
+      - [Tunnel vs. Deployed Endpoint](#tunnel-vs-deployed-endpoint)
+      - [Configuration Options](#configuration-options)
+      - [Using the Tunnel Directly](#using-the-tunnel-directly)
     - [OpenAI Process Runtime](#openai-process-runtime)
     - [Error Handling](#error-handling)
     - [Custom Agents](#custom-agents)
@@ -706,7 +744,20 @@ You can also access the raw MCP client via `agent.mcpClients['MCP_SERVER_ID']` t
 
 ### Local Development with Tunnel
 
-The SDK provides a convenient `run()` function that handles starting your agent and establishing a secure tunnel connection to the OpenServ platform. This is ideal for local development and testing.
+The SDK provides a built-in tunnel that connects your locally running agent to the OpenServ platform. This eliminates the need to deploy your agent to a public URL during development.
+
+#### How It Works
+
+When you use the `run()` function or `OpenServTunnel` class:
+
+1. Your agent starts an HTTP server locally (default port 7378)
+2. A WebSocket connection is established to OpenServ's proxy server
+3. The proxy authenticates your agent using your `OPENSERV_API_KEY`
+4. OpenServ routes incoming tasks through the tunnel to your local machine
+
+**No Agent Endpoint URL configuration is needed during local development.** The tunnel connection is identified by your API key, which is already associated with your registered agent in the OpenServ platform.
+
+#### Quick Start
 
 ```typescript
 import { Agent, run } from '@openserv-labs/sdk'
@@ -738,10 +789,19 @@ The `run()` function automatically:
 
 - Starts the agent's HTTP server
 - Creates a WebSocket tunnel to the OpenServ proxy
-- Handles reconnection with exponential backoff
+- Handles reconnection with exponential backoff (up to 10 retries)
 - Registers signal handlers for graceful shutdown (SIGTERM, SIGINT)
 
-**Configuration options:**
+#### Tunnel vs. Deployed Endpoint
+
+| Aspect            | Tunnel (Local Development) | Deployed Endpoint (Production) |
+| ----------------- | -------------------------- | ------------------------------ |
+| Setup             | Just run your code         | Deploy to cloud/server         |
+| URL Configuration | Not needed                 | Set Agent Endpoint in platform |
+| Connection        | WebSocket via proxy        | Direct HTTP                    |
+| Use case          | Development & testing      | Production                     |
+
+#### Configuration Options
 
 ```typescript
 const { tunnel, stop } = await run(agent, {
@@ -755,7 +815,7 @@ const { tunnel, stop } = await run(agent, {
 })
 ```
 
-**Using the tunnel directly:**
+#### Using the Tunnel Directly
 
 For more advanced control, you can use the `OpenServTunnel` class directly:
 
