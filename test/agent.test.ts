@@ -25,9 +25,9 @@ class TestAgent extends Agent {
     return this.openAiTools
   }
 
-  public testSetupRoutes() {
+  public testDefineRoutes() {
     // @ts-expect-error Accessing private member for testing
-    this.setupRoutes()
+    this.defineRoutes()
   }
 }
 
@@ -676,18 +676,17 @@ describe('Agent API Methods', () => {
 })
 
 describe('Agent Initialization', () => {
-  test('should throw error when API key is missing', () => {
-    assert.throws(
-      () => {
-        new Agent({
-          systemPrompt: 'You are a test agent'
-        })
-      },
-      {
-        message:
-          'OpenServ API key is required. Please provide it in options or set OPENSERV_API_KEY environment variable.'
-      }
-    )
+  test('should throw error when API key is missing on start()', async () => {
+    // Agent construction should succeed without API key
+    const agent = new Agent({
+      systemPrompt: 'You are a test agent'
+    })
+
+    // start() should throw because API key is missing
+    await assert.rejects(() => agent.start(), {
+      message:
+        'OpenServ API key is required. Please provide it in options, set OPENSERV_API_KEY environment variable, or call provision() first.'
+    })
   })
 
   test('should use default port when not provided', () => {
@@ -1316,8 +1315,8 @@ describe('Agent Route Setup', () => {
       writable: true
     })
 
-    // Call setupRoutes again to test route registration
-    agent.testSetupRoutes()
+    // Call defineRoutes again to test route registration
+    agent.testDefineRoutes()
 
     // Verify routes were set up
     assert.ok(routes.some(r => r.path === '/health' && r.method === 'GET'))
@@ -1618,6 +1617,7 @@ describe('Agent MCP Integration', () => {
 
     Object.defineProperty(agent, 'app', {
       value: {
+        use: () => {},
         listen: () => {
           return mockServer
         }
