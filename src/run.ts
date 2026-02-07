@@ -23,8 +23,9 @@ export interface RunOptions {
 export interface RunResult {
   /**
    * The tunnel instance for advanced control.
+   * Null when the tunnel is disabled (DISABLE_TUNNEL=true).
    */
-  tunnel: OpenServTunnel
+  tunnel: OpenServTunnel | null
 
   /**
    * Stop the agent and tunnel.
@@ -71,27 +72,35 @@ export interface RunResult {
 export async function run(agent: Agent, options?: RunOptions): Promise<RunResult> {
   await agent.start()
 
-  const tunnel = new OpenServTunnel({
-    ...options?.tunnel,
-    // Always use the agent's API key to ensure tunnel authenticates as the correct agent
-    // This prevents issues when running multiple agents with different API keys
-    apiKey: agent.apiKey,
-    onConnected: isReconnect => {
-      if (!isReconnect) {
-        logger.info('Agent connected to OpenServ proxy')
-      }
-    },
-    onError: error => {
-      logger.error(`Tunnel error: ${error.message}`)
-    }
-  })
+  const tunnelDisabled = process.env.DISABLE_TUNNEL === 'true'
 
-  try {
-    await tunnel.start(agent.port)
-  } catch (error) {
-    // Clean up the agent if tunnel fails to connect
-    await agent.stop()
-    throw error
+  let tunnel: OpenServTunnel | null = null
+
+  if (!tunnelDisabled) {
+    tunnel = new OpenServTunnel({
+      ...options?.tunnel,
+      // Always use the agent's API key to ensure tunnel authenticates as the correct agent
+      // This prevents issues when running multiple agents with different API keys
+      apiKey: agent.apiKey,
+      onConnected: isReconnect => {
+        if (!isReconnect) {
+          logger.info('Agent connected to OpenServ proxy')
+        }
+      },
+      onError: error => {
+        logger.error(`Tunnel error: ${error.message}`)
+      }
+    })
+
+    try {
+      await tunnel.start(agent.port)
+    } catch (error) {
+      // Clean up the agent if tunnel fails to connect
+      await agent.stop()
+      throw error
+    }
+  } else {
+    logger.info(`Agent running on port ${agent.port} (tunnel disabled)`)
   }
 
   let shutdownPromise: Promise<void> | null = null
@@ -114,7 +123,7 @@ export async function run(agent: Agent, options?: RunOptions): Promise<RunResult
         sigintHandler = null
       }
 
-      await tunnel.stop()
+      if (tunnel) await tunnel.stop()
       await agent.stop()
     })()
 

@@ -320,6 +320,7 @@ agent.start()
 | `PORT`                | Server port                                | No       | 7378                               |
 | `OPENSERV_AUTH_TOKEN` | Token for authenticating incoming requests | No       | -                                  |
 | `OPENSERV_PROXY_URL`  | Custom proxy URL for tunnel connections    | No       | `https://agents-proxy.openserv.ai` |
+| `DISABLE_TUNNEL`      | Skip tunnel and run HTTP server only       | No       | -                                  |
 
 \*Required if using OpenAI integration features
 
@@ -794,12 +795,15 @@ The `run()` function automatically:
 
 #### Tunnel vs. Deployed Endpoint
 
-| Aspect            | Tunnel (Local Development) | Deployed Endpoint (Production) |
-| ----------------- | -------------------------- | ------------------------------ |
-| Setup             | Just run your code         | Deploy to cloud/server         |
-| URL Configuration | Not needed                 | Set Agent Endpoint in platform |
-| Connection        | WebSocket via proxy        | Direct HTTP                    |
-| Use case          | Development & testing      | Production                     |
+| Aspect            | Tunnel (Local Development) | Deployed Endpoint (Production)       |
+| ----------------- | -------------------------- | ------------------------------------ |
+| Setup             | Just run your code         | Deploy to cloud/server               |
+| URL Configuration | Not needed                 | Set Agent Endpoint in platform       |
+| Connection        | WebSocket via proxy        | Direct HTTP                          |
+| Tunnel            | Enabled (default)          | Disabled (`DISABLE_TUNNEL=true`)     |
+| Use case          | Development & testing      | Production                           |
+
+When deploying to a hosting provider like Cloud Run, set `DISABLE_TUNNEL=true` as an environment variable. This makes `run()` start only the HTTP server without opening a WebSocket tunnel to the proxy — the platform reaches your agent directly at its public URL.
 
 #### Configuration Options
 
