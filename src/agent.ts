@@ -936,9 +936,7 @@ export class Agent<M extends string = string> {
    * @private
    */
   private defineRoutes() {
-    this.router.get('/health', async (_req: express.Request, res: express.Response) => {
-      res.status(200).json({ status: 'ok', uptime: process.uptime() })
-    })
+    // Note: /health is registered on this.app in start() before auth middleware
 
     this.router.post('/', async (req: express.Request) => {
       return this.handleRootRoute({ body: req.body })
@@ -1002,6 +1000,11 @@ export class Agent<M extends string = string> {
     this.app.use(hpp())
     this.app.use(helmet())
     this.app.use(compression())
+
+    // Health check — before auth so the platform health cron can reach it
+    this.app.get('/health', (_req, res) => {
+      res.status(200).json({ status: 'ok', uptime: process.uptime() })
+    })
 
     // Auth middleware
     if (this.authToken) {
