@@ -18,7 +18,7 @@
     "lint:fix": "eslint . --ext .ts --fix",
     "format": "prettier --write \"**/*.{ts,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,json,md}\"",
-    "test": "node --import tsx --test test/**/*.test.ts",
+    "test": "node --import tsx --test --test-concurrency=1 test/**/*.test.ts",
     "test:watch": "node --import tsx --test --watch test/**/*.test.ts",
     "test:coverage": "node --import tsx --test --enable-source-maps --experimental-test-coverage --test-timeout=5000 test/**/*.test.ts"
   },

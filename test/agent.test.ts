@@ -1318,8 +1318,11 @@ describe('Agent Route Setup', () => {
     // Call defineRoutes again to test route registration
     agent.testDefineRoutes()
 
-    // Verify routes were set up
-    assert.ok(routes.some(r => r.path === '/health' && r.method === 'GET'))
+    // Verify routes were set up (note: /health is registered on app in start(), not in defineRoutes())
+    assert.ok(
+      !routes.some(r => r.path === '/health' && r.method === 'GET'),
+      '/health should NOT be on the router (it is registered on app before auth)'
+    )
     assert.ok(routes.some(r => r.path === '/tools/:toolName' && r.method === 'POST'))
     assert.ok(routes.some(r => r.path === '/' && r.method === 'POST'))
   })
@@ -1618,6 +1621,7 @@ describe('Agent MCP Integration', () => {
     Object.defineProperty(agent, 'app', {
       value: {
         use: () => {},
+        get: () => {},
         listen: () => {
           return mockServer
         }
