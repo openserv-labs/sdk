@@ -134,7 +134,7 @@ export interface RequestData {
 export interface ResponseData {
   status: number
   headers: Record<string, string | string[] | undefined>
-  body: string
+  body: Buffer
 }
 
 interface TunnelMessage {
@@ -257,45 +257,18 @@ async function forwardToLocalAgent(
 
       res.on('end', () => {
         if (!responseTooLarge) {
-          const responseBuffer = Buffer.concat(chunks)
-          const contentType = res.headers['content-type'] || ''
-
-          // Check if content is text-based (can be safely converted to string)
-          const isTextContent =
-            contentType.includes('text/') ||
-            contentType.includes('application/json') ||
-            contentType.includes('application/xml') ||
-            contentType.includes('application/javascript') ||
-            contentType.includes('+json') ||
-            contentType.includes('+xml')
-
-          // For text content, convert to UTF-8 string; for binary, use base64
-          const responseBody = isTextContent
-            ? responseBuffer.toString('utf8')
-            : responseBuffer.toString('base64')
+          const responseBody = Buffer.concat(chunks)
 
           // Build clean response headers - strip hop-by-hop headers
           const responseHeaders: Record<string, string | string[] | undefined> = {
             ...(res.headers as Record<string, string | string[] | undefined>)
           }
-          // Remove hop-by-hop headers that shouldn't be forwarded back
           delete responseHeaders.connection
           delete responseHeaders['keep-alive']
           delete responseHeaders['transfer-encoding']
           delete responseHeaders.te
           delete responseHeaders.trailer
           delete responseHeaders.upgrade
-          // Remove original content-length - will be recalculated based on actual body
-          delete responseHeaders['content-length']
-
-          // Set correct content-length based on the (possibly re-encoded) body
-          const bodyBytes = Buffer.byteLength(responseBody, 'utf8')
-          responseHeaders['content-length'] = String(bodyBytes)
-
-          // Add encoding header for binary responses
-          if (!isTextContent) {
-            responseHeaders['x-openserv-encoding'] = 'base64'
-          }
 
           resolve({
             status: res.statusCode || 500,
@@ -542,10 +515,14 @@ export class OpenServTunnel {
    * Entry action for 'authenticating' state: send auth message.
    */
   private doAuthenticate(): void {
-    const authMessage = {
+    const forceTunnel = process.env.FORCE_TUNNEL === 'true'
+    const authMessage: Record<string, unknown> = {
       type: 'auth',
       apiKey: this.apiKey,
       localPort: this.localPort
+    }
+    if (forceTunnel) {
+      authMessage.forceTunnel = true
     }
     this.ws?.send(JSON.stringify(authMessage))
     logger.info('Authenticating...')
@@ -960,46 +937,51 @@ export class OpenServTunnel {
   // Request Forwarding
   // ============================================================================
 
-  private async forwardRequest(requestData: RequestData): Promise<void> {
-    const sendResponse = (responseData: {
-      id: string
-      status: number
-      headers: Record<string, string | string[] | undefined>
-      body: string
-    }) => {
-      if (this.ws?.readyState === WebSocket.OPEN) {
-        this.ws.send(
-          JSON.stringify({
-            type: 'response',
-            data: responseData
-          })
-        )
-      } else {
-        logger.warn(`Cannot send response for request ${responseData.id}: WebSocket not open`)
-      }
+  /**
+   * Send a response back through the WebSocket as a binary frame.
+   * Format: [4 bytes: metadata length (uint32 BE)][JSON metadata][raw body bytes]
+   * This preserves the body transparently — gzip, images, any bytes.
+   */
+  private sendBinaryResponse(
+    id: string,
+    status: number,
+    headers: Record<string, string | string[] | undefined>,
+    body: Buffer
+  ): void {
+    if (this.ws?.readyState !== WebSocket.OPEN) {
+      logger.warn(`Cannot send response for request ${id}: WebSocket not open`)
+      return
     }
 
+    const metadata = Buffer.from(
+      JSON.stringify({ type: 'response', data: { id, status, headers } })
+    )
+    const frame = Buffer.alloc(4 + metadata.length + body.length)
+    frame.writeUInt32BE(metadata.length, 0)
+    metadata.copy(frame, 4)
+    body.copy(frame, 4 + metadata.length)
+    this.ws.send(frame)
+  }
+
+  private async forwardRequest(requestData: RequestData): Promise<void> {
     try {
       const response = await forwardToLocalAgent(this.localPort, requestData)
 
-      sendResponse({
-        id: requestData.id,
-        status: response.status,
-        headers: response.headers,
-        body: response.body
-      })
+      this.sendBinaryResponse(requestData.id, response.status, response.headers, response.body)
     } catch (error) {
       logger.error(`Error forwarding request: ${(error as Error).message}`)
 
-      sendResponse({
-        id: requestData.id,
-        status: 502,
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          error: 'Bad Gateway',
-          message: (error as Error).message
-        })
-      })
+      this.sendBinaryResponse(
+        requestData.id,
+        502,
+        { 'content-type': 'application/json' },
+        Buffer.from(
+          JSON.stringify({
+            error: 'Bad Gateway',
+            message: (error as Error).message
+          })
+        )
+      )
     }
   }
 
