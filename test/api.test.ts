@@ -83,7 +83,8 @@ describe('Agent API Methods', () => {
         () => agent.process({ messages: [{ role: 'user', content: 'test message' }] }),
         {
           message:
-            'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
+            'OpenAI API key is required for process(). Provide it via options or OPENAI_API_KEY env var. ' +
+            'Alternatively, use generate() for runtime-delegated LLM calls, or run-less capabilities.'
         }
       )
     } finally {

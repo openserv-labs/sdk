@@ -59,7 +59,7 @@ export interface RunResult {
  * agent.addCapability({
  *   name: 'greet',
  *   description: 'Greet someone',
- *   schema: z.object({ name: z.string() }),
+ *   inputSchema: z.object({ name: z.string() }),
  *   run: async ({ args }) => `Hello, ${args.name}!`
  * })
  *

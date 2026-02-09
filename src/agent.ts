@@ -57,7 +57,7 @@ import { zodToJsonSchema } from 'zod-to-json-schema'
 import { jsonSchemaToZod } from '@n8n/json-schema-to-zod'
 
 import OpenAI from 'openai'
-import type { z } from 'zod'
+import { z } from 'zod'
 import { Capability } from './capability'
 import {
   McpError,
@@ -70,6 +70,80 @@ import {
 const PLATFORM_URL = process.env.OPENSERV_API_URL || 'https://api.openserv.ai'
 const RUNTIME_URL = process.env.OPENSERV_RUNTIME_URL || 'https://agents.openserv.ai'
 const DEFAULT_PORT = Number.parseInt(process.env.PORT || '') || 7378
+
+/** Default input schema for run-less capabilities that omit inputSchema */
+const DEFAULT_INPUT_SCHEMA = z.object({ input: z.string() })
+
+/** Runtime validation schema for capability configs */
+const capabilityConfigSchema = z
+  .object({
+    name: z.string().min(1),
+    description: z.string().min(1),
+    inputSchema: z.any().optional(),
+    schema: z.any().optional(),
+    run: z.any().optional(),
+    outputSchema: z.any().optional()
+  })
+  .superRefine((data, ctx) => {
+    if (data.inputSchema && data.schema) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Cannot provide both "inputSchema" and "schema". Use "inputSchema" ("schema" is deprecated).'
+      })
+    }
+    if (data.run && data.outputSchema) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Cannot provide both "run" and "outputSchema". "outputSchema" is only for run-less capabilities.'
+      })
+    }
+    if (!data.inputSchema && !data.schema && data.run) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message:
+          'Runnable capabilities require "inputSchema" (or deprecated "schema"). ' +
+          'Only run-less capabilities can omit it.'
+      })
+    }
+  })
+
+/** Accept inputSchema (preferred) or schema (deprecated), never both */
+type WithInputSchema<S extends z.ZodTypeAny> =
+  | { inputSchema: S; schema?: never }
+  | { schema: S; inputSchema?: never }
+
+/** Optional inputSchema for run-less caps -- can omit entirely (uses default) */
+type WithOptionalInputSchema<S extends z.ZodTypeAny> =
+  | { inputSchema: S; schema?: never }
+  | { schema: S; inputSchema?: never }
+  | { inputSchema?: never; schema?: never }
+
+/** Capability with a run function -- inputSchema required, outputSchema not allowed */
+type RunnableCapabilityConfig<M extends string, S extends z.ZodTypeAny> = {
+  name: string
+  description: string
+  run(
+    this: Agent<M>,
+    params: { args: z.infer<S>; action?: ActionSchema },
+    messages: ChatCompletionMessageParam[]
+  ): string | Promise<string>
+  outputSchema?: never
+} & WithInputSchema<S>
+
+/** Capability without run -- inputSchema optional, outputSchema optional */
+type RunlessCapabilityConfig<S extends z.ZodTypeAny = z.ZodTypeAny> = {
+  name: string
+  description: string
+  run?: never
+  outputSchema?: z.ZodTypeAny
+} & WithOptionalInputSchema<S>
+
+/** Union of all valid capability forms */
+export type CapabilityConfig<M extends string, S extends z.ZodTypeAny> =
+  | RunnableCapabilityConfig<M, S>
+  | RunlessCapabilityConfig<S>
 
 /**
  * Configuration options for creating a new Agent instance.
@@ -101,9 +175,9 @@ export interface AgentOptions<T extends string> {
   systemPrompt: string
 
   /**
-   * The OpenAI API key for chat completions.
+   * Optional OpenAI API key for direct LLM access via process().
+   * NOT required for platform-deployed agents -- use generate() or run-less capabilities instead.
    * Can also be provided via OPENAI_API_KEY environment variable.
-   * Required when using the process() method.
    */
   openaiApiKey?: string
 
@@ -159,7 +233,8 @@ export class Agent<M extends string = string> {
 
   /**
    * Array of capabilities (tools) available to the agent.
-   * Each capability is an instance of the Capability class with a name, description, schema, and run function.
+   * Each capability is an instance of the Capability class with a name, description, inputSchema,
+   * and optionally a run function and/or outputSchema.
    * @protected
    */
   protected tools: Array<Capability<M, z.ZodTypeAny>> = []
@@ -239,7 +314,7 @@ export class Agent<M extends string = string> {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters: zodToJsonSchema(tool.schema)
+        parameters: zodToJsonSchema(tool.inputSchema)
       }
     })) as ChatCompletionTool[]
   }
@@ -256,7 +331,8 @@ export class Agent<M extends string = string> {
       const apiKey = this.options.openaiApiKey || process.env.OPENAI_API_KEY
       if (!apiKey) {
         throw new Error(
-          'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
+          'OpenAI API key is required for process(). Provide it via options or OPENAI_API_KEY env var. ' +
+            'Alternatively, use generate() for runtime-delegated LLM calls, or run-less capabilities.'
         )
       }
       this._openai = new OpenAI({ apiKey })
@@ -301,43 +377,42 @@ export class Agent<M extends string = string> {
 
   /**
    * Adds a single capability (tool) to the agent.
-   * Each capability must have a unique name and defines a function that can be called via the API.
+   * Each capability must have a unique name. Capabilities can be:
+   * - **Runnable**: has a `run` function and requires `inputSchema` (or deprecated `schema`)
+   * - **Run-less**: no `run` function -- the runtime handles execution via LLM.
+   *   `inputSchema` is optional (defaults to `{ input: z.string() }`), `outputSchema` is optional.
    *
    * @template S - The Zod schema type for the capability's parameters
-   * @param {Object} capability - The capability configuration
-   * @param {string} capability.name - Unique name for the capability
-   * @param {string} capability.description - Description of what the capability does
-   * @param {S} capability.schema - Zod schema defining the capability's parameters
-   * @param {Function} capability.run - Function that implements the capability's behavior
-   * @param {Object} capability.run.params - Parameters for the run function
-   * @param {z.infer<S>} capability.run.params.args - Validated arguments matching the schema
-   * @param {ActionSchema} [capability.run.params.action] - Optional action context
-   * @param {ChatCompletionMessageParam[]} capability.run.messages - Chat message history
-   * @returns {this} The agent instance for method chaining
+   * @param capability - The capability configuration
+   * @returns The agent instance for method chaining
    * @throws {Error} If a capability with the same name already exists
+   * @throws {Error} If both `inputSchema` and `schema` are provided
+   * @throws {Error} If both `run` and `outputSchema` are provided
+   * @throws {Error} If a runnable capability omits `inputSchema`/`schema`
    */
-  addCapability<S extends z.ZodTypeAny>({
-    name,
-    description,
-    schema,
-    run
-  }: {
-    name: string
-    description: string
-    schema: S
-    run(
-      this: Agent<M>,
-      params: { args: z.infer<S>; action?: ActionSchema },
-      messages: ChatCompletionMessageParam[]
-    ): string | Promise<string>
-  }): this {
-    // Validate tool name uniqueness
+  addCapability<S extends z.ZodTypeAny>(capability: CapabilityConfig<M, S>): this {
+    const result = capabilityConfigSchema.safeParse(capability)
+    if (!result.success) {
+      throw new Error(result.error.issues[0]?.message ?? 'Invalid capability configuration')
+    }
+
+    const { name, description, run, outputSchema } = result.data
+    const resolvedSchema = (result.data.inputSchema ??
+      result.data.schema ??
+      DEFAULT_INPUT_SCHEMA) as S
+
     if (this.tools.some(tool => tool.name === name)) {
       throw new Error(`Tool with name "${name}" already exists`)
     }
-    // Type assertion through unknown for safe conversion between compatible generic types
+
     this.tools.push(
-      new Capability(name, description, schema, run) as unknown as Capability<M, z.ZodTypeAny>
+      new Capability(
+        name,
+        description,
+        resolvedSchema,
+        typeof run === 'function' ? (run as Capability<M, S>['run']) : undefined,
+        outputSchema
+      ) as unknown as Capability<M, z.ZodTypeAny>
     )
     return this
   }
@@ -345,27 +420,15 @@ export class Agent<M extends string = string> {
   /**
    * Adds multiple capabilities (tools) to the agent at once.
    * Each capability must have a unique name and not conflict with existing capabilities.
+   * Each element can be runnable or run-less independently.
    *
    * @template T - Tuple of Zod schema types for the capabilities' parameters
-   * @param {Object} capabilities - Array of capability configurations
-   * @param {string} capabilities[].name - Unique name for each capability
-   * @param {string} capabilities[].description - Description of what each capability does
-   * @param {T[number]} capabilities[].schema - Zod schema defining each capability's parameters
-   * @param {Function} capabilities[].run - Function that implements each capability's behavior
-   * @returns {this} The agent instance for method chaining
+   * @param capabilities - Array of capability configurations
+   * @returns The agent instance for method chaining
    * @throws {Error} If any capability has a name that already exists
    */
   addCapabilities<T extends readonly [z.ZodTypeAny, ...z.ZodTypeAny[]]>(capabilities: {
-    [K in keyof T]: {
-      name: string
-      description: string
-      schema: T[K]
-      run(
-        this: Agent<M>,
-        params: { args: z.infer<T[K]>; action?: ActionSchema },
-        messages: ChatCompletionMessageParam[]
-      ): string | Promise<string>
-    }
+    [K in keyof T]: CapabilityConfig<M, T[K]>
   }): this {
     for (const capability of capabilities) {
       this.addCapability(capability)
@@ -691,6 +754,62 @@ export class Agent<M extends string = string> {
   }
 
   /**
+   * Generate text via the OpenServ runtime.
+   * Billed to the workspace/task in the action.
+   * Use this inside custom `run` functions when you need LLM generation without your own OpenAI key.
+   *
+   * @param params.prompt - The prompt for the LLM
+   * @param params.messages - Optional conversation history for context
+   * @param params.action - Action context (required for billing)
+   * @returns The generated text
+   */
+  async generate(params: {
+    prompt: string
+    messages?: ChatCompletionMessageParam[]
+    action: ActionSchema
+  }): Promise<string>
+  /**
+   * Generate a structured object via the OpenServ runtime.
+   * Billed to the workspace/task in the action.
+   *
+   * @param params.prompt - The prompt for the LLM
+   * @param params.messages - Optional conversation history for context
+   * @param params.outputSchema - Zod schema for structured output
+   * @param params.action - Action context (required for billing)
+   * @returns The generated object, validated against the schema
+   */
+  async generate<T extends z.ZodTypeAny>(params: {
+    prompt: string
+    messages?: ChatCompletionMessageParam[]
+    outputSchema: T
+    action: ActionSchema
+  }): Promise<z.infer<T>>
+  async generate<T extends z.ZodTypeAny>(params: {
+    prompt: string
+    messages?: ChatCompletionMessageParam[]
+    outputSchema?: T
+    action: ActionSchema
+  }): Promise<string | z.infer<T>> {
+    const response = await this.runtimeClient.post('/generate', {
+      prompt: params.prompt,
+      ...(params.messages ? { messages: params.messages } : {}),
+      ...(params.outputSchema ? { outputSchema: zodToJsonSchema(params.outputSchema) } : {}),
+      action: params.action
+    })
+
+    if (params.outputSchema) {
+      if (response.data.object === undefined || response.data.object === null) {
+        throw new Error('Runtime returned no structured output for generate() with outputSchema')
+      }
+      return params.outputSchema.parse(response.data.object)
+    }
+    if (typeof response.data.text !== 'string') {
+      throw new Error('Runtime returned no text for generate()')
+    }
+    return response.data.text
+  }
+
+  /**
    * Processes a conversation with OpenAI, handling tool calls iteratively until completion.
    *
    * @param {ProcessParams} params - Parameters for processing the conversation
@@ -703,7 +822,8 @@ export class Agent<M extends string = string> {
       const apiKey = this.options.openaiApiKey || process.env.OPENAI_API_KEY
       if (!apiKey) {
         throw new Error(
-          'OpenAI API key is required for process(). Please provide it in options or set OPENAI_API_KEY environment variable.'
+          'OpenAI API key is required for process(). Provide it via options or OPENAI_API_KEY env var. ' +
+            'Alternatively, use generate() for runtime-delegated LLM calls, or run-less capabilities.'
         )
       }
 
@@ -754,8 +874,35 @@ export class Agent<M extends string = string> {
                 throw new Error(`Tool "${name}" not found`)
               }
 
-              // Call the tool's run method with the parsed arguments and bind this
-              const result = await tool.run.bind(this)({ args: parsedArgs }, currentMessages)
+              let result: string
+              if (tool.run) {
+                // Call the tool's run method with the parsed arguments and bind this
+                result = await tool.run.bind(this)({ args: parsedArgs }, currentMessages)
+              } else {
+                // Shim: use OpenAI with conversation history + description for run-less capabilities
+                const shimCompletion = await this.openai.chat.completions.create({
+                  model: 'gpt-4o',
+                  messages: [
+                    ...currentMessages,
+                    { role: 'system', content: tool.description },
+                    { role: 'user', content: JSON.stringify(parsedArgs) }
+                  ],
+                  ...(tool.outputSchema
+                    ? {
+                        response_format: {
+                          type: 'json_schema' as const,
+                          json_schema: {
+                            name: tool.name,
+                            schema: zodToJsonSchema(tool.outputSchema),
+                            strict: true
+                          }
+                        }
+                      }
+                    : {})
+                })
+                result = shimCompletion.choices[0]?.message?.content || ''
+              }
+
               return {
                 role: 'tool' as const,
                 content: JSON.stringify(result),
@@ -810,9 +957,13 @@ export class Agent<M extends string = string> {
       })
     }
 
+    const proxyTools = this.tools.filter(t => t.run)
+    const runtimeTools = this.tools.filter(t => !t.run)
+
     try {
       await this.runtimeClient.post('/execute', {
-        tools: this.tools.map(convertToolToJsonSchema),
+        tools: proxyTools.map(convertProxyToolToJsonSchema),
+        runtimeTools: runtimeTools.map(convertRuntimeToolToJsonSchema),
         messages,
         action
       })
@@ -846,9 +997,13 @@ export class Agent<M extends string = string> {
       }
     }
 
+    const proxyTools = this.tools.filter(t => t.run)
+    const runtimeTools = this.tools.filter(t => !t.run)
+
     try {
       await this.runtimeClient.post('/chat', {
-        tools: this.tools.map(convertToolToJsonSchema),
+        tools: proxyTools.map(convertProxyToolToJsonSchema),
+        runtimeTools: runtimeTools.map(convertRuntimeToolToJsonSchema),
         messages,
         action
       })
@@ -892,7 +1047,13 @@ export class Agent<M extends string = string> {
         throw new BadRequest(`Tool "${req.params.toolName}" not found`)
       }
 
-      const args = await tool.schema.parseAsync(req.body?.args)
+      if (!tool.run) {
+        throw new BadRequest(
+          `Tool "${req.params.toolName}" is a run-less capability handled by the runtime, not by this agent.`
+        )
+      }
+
+      const args = await tool.inputSchema.parseAsync(req.body?.args)
       const messages = req.body.messages || []
       const result = await tool.run.call(this, { args, action: req.body.action }, messages)
       return { result }
@@ -1181,7 +1342,7 @@ export class Agent<M extends string = string> {
       this.addCapability({
         name: capabilityName,
         description: tool.description || `Tool from MCP server ${serverId}`,
-        schema: jsonSchemaToZod(inputSchema),
+        inputSchema: jsonSchemaToZod(inputSchema),
         async run({ args }) {
           const mcpClient = this.mcpClients[serverId]
           if (!mcpClient) {
@@ -1212,10 +1373,19 @@ export class Agent<M extends string = string> {
   }
 }
 
-function convertToolToJsonSchema<M extends string>(tool: Capability<M, z.ZodTypeAny>) {
+function convertProxyToolToJsonSchema<M extends string>(tool: Capability<M, z.ZodTypeAny>) {
   return {
     name: tool.name,
     description: tool.description,
-    schema: zodToJsonSchema(tool.schema)
+    schema: zodToJsonSchema(tool.inputSchema)
+  }
+}
+
+function convertRuntimeToolToJsonSchema<M extends string>(tool: Capability<M, z.ZodTypeAny>) {
+  return {
+    name: tool.name,
+    description: tool.description,
+    schema: zodToJsonSchema(tool.inputSchema),
+    ...(tool.outputSchema ? { outputSchema: zodToJsonSchema(tool.outputSchema) } : {})
   }
 }

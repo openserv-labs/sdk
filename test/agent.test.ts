@@ -48,7 +48,7 @@ describe('Agent', () => {
     agent.addCapability({
       name: 'testTool',
       description: 'A test tool',
-      schema: z.object({
+      inputSchema: z.object({
         input: z.string()
       }),
       run: async ({ args }) => args.input
@@ -105,7 +105,7 @@ describe('Agent', () => {
     agent.addCapability({
       name: 'testTool',
       description: 'A test tool',
-      schema: z.object({
+      inputSchema: z.object({
         input: z.string()
       }),
       run: async ({ args }) => args.input
@@ -630,7 +630,7 @@ describe('Agent API Methods', () => {
     const testTool = {
       name: 'testTool',
       description: 'A test tool',
-      schema: z.object({
+      inputSchema: z.object({
         input: z.string()
       }),
       run: async ({ args, action }) => {
@@ -1058,7 +1058,7 @@ describe('Agent Process Methods', () => {
     agent.addCapability({
       name: 'testTool',
       description: 'A test tool',
-      schema: z.object({
+      inputSchema: z.object({
         input: z.string()
       }),
       run: async ({ args }) => args.input
@@ -1336,7 +1336,7 @@ describe('Agent Route Setup', () => {
     const testTool = {
       name: 'testTool',
       description: 'A test tool',
-      schema: z.object({
+      inputSchema: z.object({
         input: z.string()
       }),
       run: async ({ args }) => args.input

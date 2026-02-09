@@ -1,5 +1,5 @@
 export { Agent } from './agent'
-export type { AgentOptions } from './agent'
+export type { AgentOptions, CapabilityConfig } from './agent'
 export { Capability } from './capability'
 export { OpenServTunnel } from './tunnel'
 export type {

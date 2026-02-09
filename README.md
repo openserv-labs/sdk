@@ -232,7 +232,7 @@ npm install @openserv-labs/sdk
    agent.addCapability({
      name: 'greet',
      description: 'Greet a user by name',
-     schema: z.object({
+     inputSchema: z.object({
        name: z.string().describe('The name of the user to greet')
      }),
      async run({ args }) {
@@ -273,7 +273,7 @@ const agent = new Agent({
 agent.addCapability({
   name: 'greet',
   description: 'Greet a user by name',
-  schema: z.object({
+  inputSchema: z.object({
     name: z.string().describe('The name of the user to greet')
   }),
   async run({ args }) {
@@ -286,7 +286,7 @@ agent.addCapabilities([
   {
     name: 'farewell',
     description: 'Say goodbye to a user',
-    schema: z.object({
+    inputSchema: z.object({
       name: z.string().describe('The name of the user to bid farewell')
     }),
     async run({ args }) {
@@ -296,7 +296,7 @@ agent.addCapabilities([
   {
     name: 'help',
     description: 'Show available commands',
-    schema: z.object({}),
+    inputSchema: z.object({}),
     async run() {
       return 'Available commands: greet, farewell, help'
     }
@@ -316,13 +316,13 @@ agent.start()
 | Variable              | Description                                | Required | Default                            |
 | --------------------- | ------------------------------------------ | -------- | ---------------------------------- |
 | `OPENSERV_API_KEY`    | Your OpenServ API key                      | Yes      | -                                  |
-| `OPENAI_API_KEY`      | OpenAI API key (for process() method)      | No\*     | -                                  |
+| `OPENAI_API_KEY`      | OpenAI API key (only for process() method) | No       | -                                  |
 | `PORT`                | Server port                                | No       | 7378                               |
 | `OPENSERV_AUTH_TOKEN` | Token for authenticating incoming requests | No       | -                                  |
 | `OPENSERV_PROXY_URL`  | Custom proxy URL for tunnel connections    | No       | `https://agents-proxy.openserv.ai` |
 | `DISABLE_TUNNEL`      | Skip tunnel and run HTTP server only       | No       | -                                  |
 
-\*Required if using OpenAI integration features
+**Note:** `OPENAI_API_KEY` is only needed if you use the `process()` method for direct OpenAI calls. Most agents don't need it -- use run-less capabilities or `generate()` instead.
 
 ## Core Concepts
 
@@ -334,8 +334,10 @@ Each capability must include:
 
 - `name`: Unique identifier for the capability
 - `description`: What the capability does
-- `schema`: Zod schema defining the parameters
-- `run`: Function that executes the capability, receiving validated args and action context
+- `inputSchema`: Zod schema defining the input parameters (optional for run-less capabilities, defaults to `z.object({ input: z.string() })`)
+- `run`: Function that executes the capability (optional -- omit for run-less capabilities handled by the runtime)
+- `outputSchema`: Zod schema for structured LLM output (only for run-less capabilities)
+- `schema`: **Deprecated** -- use `inputSchema` instead (kept for backwards compatibility)
 
 ```typescript
 import { Agent } from '@openserv-labs/sdk'
@@ -349,7 +351,7 @@ const agent = new Agent({
 agent.addCapability({
   name: 'summarize',
   description: 'Summarize a piece of text',
-  schema: z.object({
+  inputSchema: z.object({
     text: z.string().describe('Text content to summarize'),
     maxLength: z.number().optional().describe('Maximum length of summary')
   }),
@@ -377,7 +379,7 @@ agent.addCapabilities([
   {
     name: 'analyze',
     description: 'Analyze text for sentiment and keywords',
-    schema: z.object({
+    inputSchema: z.object({
       text: z.string().describe('Text to analyze')
     }),
     async run({ args, action }) {
@@ -388,7 +390,7 @@ agent.addCapabilities([
   {
     name: 'help',
     description: 'Show available commands',
-    schema: z.object({}),
+    inputSchema: z.object({}),
     async run({ args, action }) {
       return 'Available commands: summarize, analyze, help'
     }
@@ -399,7 +401,7 @@ agent.addCapabilities([
 Each capability's run function receives:
 
 - `params`: Object containing:
-  - `args`: The validated arguments matching the capability's schema
+  - `args`: The validated arguments matching the capability's inputSchema
   - `action`: The action context containing:
     - `task`: The current task context (if running as part of a task)
     - `workspace`: The current workspace context
@@ -407,6 +409,92 @@ Each capability's run function receives:
     - Other action-specific properties
 
 The run function must return a string or Promise<string>.
+
+### Run-less Capabilities
+
+Run-less capabilities let you define tools without a `run` function. The OpenServ runtime handles execution via its own LLM, using the capability's `description` as instructions. This means you don't need your own OpenAI key.
+
+```typescript
+import { Agent, run } from '@openserv-labs/sdk'
+import { z } from 'zod'
+
+const agent = new Agent({
+  systemPrompt: 'You are a creative writing assistant.'
+})
+
+// Simplest form: just name + description (default inputSchema: { input: string })
+agent.addCapability({
+  name: 'generate_haiku',
+  description:
+    'Generate a haiku poem (5-7-5 syllables) about the given input. Only output the haiku.'
+})
+
+// With custom inputSchema
+agent.addCapability({
+  name: 'translate',
+  description: 'Translate the given text to the target language. Return only the translated text.',
+  inputSchema: z.object({
+    text: z.string().describe('The text to translate'),
+    targetLanguage: z.string().describe('The target language')
+  })
+})
+
+// With structured output via outputSchema
+agent.addCapability({
+  name: 'analyze_sentiment',
+  description: 'Analyze the sentiment of the given input text.',
+  outputSchema: z.object({
+    sentiment: z.enum(['positive', 'negative', 'neutral']),
+    confidence: z.number().min(0).max(1)
+  })
+})
+
+run(agent)
+```
+
+### The `generate()` Method
+
+Inside custom `run` functions, use `this.generate()` to delegate LLM calls to the OpenServ runtime without needing your own OpenAI key. The `action` parameter is required for billing. You can optionally pass `messages` for conversation context.
+
+```typescript
+agent.addCapability({
+  name: 'write_and_save_poem',
+  description: 'Write a poem and save it to the workspace',
+  inputSchema: z.object({ topic: z.string() }),
+  async run({ args, action }, messages) {
+    // Text generation
+    const poem = await this.generate({
+      prompt: `Write a short poem about ${args.topic}`,
+      action: action!
+    })
+
+    // Structured output generation
+    const metadata = await this.generate({
+      prompt: `Suggest a title and 3 tags for this poem: ${poem}`,
+      outputSchema: z.object({
+        title: z.string(),
+        tags: z.array(z.string()).length(3)
+      }),
+      action: action!
+    })
+
+    // With conversation history for context
+    const followUp = await this.generate({
+      prompt: 'Based on our conversation, suggest a related topic.',
+      messages, // pass conversation history from the run function
+      action: action!
+    })
+
+    await this.uploadFile({
+      workspaceId: action!.workspace.id,
+      path: `poems/${metadata.title}.txt`,
+      file: poem
+    })
+
+    return `Saved "${metadata.title}" with tags: ${metadata.tags.join(', ')}`
+  }
+})
+```
 
 ### Tasks
 
@@ -451,7 +539,7 @@ const customerSupportAgent = new Agent({
     {
       name: 'respondToCustomer',
       description: 'Generate a response to a customer inquiry',
-      schema: z.object({
+      inputSchema: z.object({
         query: z.string(),
         context: z.string().optional()
       }),
@@ -771,7 +859,7 @@ const agent = new Agent({
 agent.addCapability({
   name: 'greet',
   description: 'Greet someone',
-  schema: z.object({ name: z.string() }),
+  inputSchema: z.object({ name: z.string() }),
   async run({ args }) {
     return `Hello, ${args.name}!`
   }
@@ -795,13 +883,13 @@ The `run()` function automatically:
 
 #### Tunnel vs. Deployed Endpoint
 
-| Aspect            | Tunnel (Local Development) | Deployed Endpoint (Production)       |
-| ----------------- | -------------------------- | ------------------------------------ |
-| Setup             | Just run your code         | Deploy to cloud/server               |
-| URL Configuration | Not needed                 | Set Agent Endpoint in platform       |
-| Connection        | WebSocket via proxy        | Direct HTTP                          |
-| Tunnel            | Enabled (default)          | Disabled (`DISABLE_TUNNEL=true`)     |
-| Use case          | Development & testing      | Production                           |
+| Aspect            | Tunnel (Local Development) | Deployed Endpoint (Production)   |
+| ----------------- | -------------------------- | -------------------------------- |
+| Setup             | Just run your code         | Deploy to cloud/server           |
+| URL Configuration | Not needed                 | Set Agent Endpoint in platform   |
+| Connection        | WebSocket via proxy        | Direct HTTP                      |
+| Tunnel            | Enabled (default)          | Disabled (`DISABLE_TUNNEL=true`) |
+| Use case          | Development & testing      | Production                       |
 
 When deploying to a hosting provider like Cloud Run, set `DISABLE_TUNNEL=true` as an environment variable. This makes `run()` start only the HTTP server without opening a WebSocket tunnel to the proxy — the platform reaches your agent directly at its public URL.
 

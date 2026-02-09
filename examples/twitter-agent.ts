@@ -6,14 +6,9 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { z } from 'zod'
 
-if (!process.env.OPENAI_API_KEY) {
-  throw new Error('OPENAI_API_KEY environment variable is required')
-}
-
 const marketingManager = new Agent({
   systemPrompt: fs.readFileSync(path.join(__dirname, './system.md'), 'utf8'),
-  apiKey: process.env.OPENSERV_API_KEY,
-  openaiApiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENSERV_API_KEY
 })
 
 marketingManager
@@ -21,7 +16,7 @@ marketingManager
     {
       name: 'getTwitterAccount',
       description: 'Gets the Twitter account for the current user',
-      schema: z.object({}),
+      inputSchema: z.object({}),
       async run({ action }) {
         const details = await this.callIntegration({
           workspaceId: action!.workspace.id,
@@ -38,7 +33,7 @@ marketingManager
     {
       name: 'sendMarketingTweet',
       description: 'Sends a marketing tweet to Twitter',
-      schema: z.object({
+      inputSchema: z.object({
         tweetText: z.string()
       }),
       async run({ args, action }) {
