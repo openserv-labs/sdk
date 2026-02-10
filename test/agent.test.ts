@@ -124,7 +124,10 @@ describe('Agent', () => {
       assert.fail('Expected error to be thrown')
     } catch (error) {
       assert.ok(error instanceof BadRequestError)
-      assert.equal((error as InstanceType<typeof BadRequestError>).message, 'Action context is required for tool execution')
+      assert.equal(
+        (error as InstanceType<typeof BadRequestError>).message,
+        'Action context is required for tool execution'
+      )
     }
   })
 
