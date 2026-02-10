@@ -402,7 +402,7 @@ Each capability's run function receives:
 
 - `params`: Object containing:
   - `args`: The validated arguments matching the capability's inputSchema
-  - `action`: The action context containing:
+  - `action`: The action context provided by the runtime, containing:
     - `task`: The current task context (if running as part of a task)
     - `workspace`: The current workspace context
     - `me`: Information about the current agent
@@ -465,7 +465,7 @@ agent.addCapability({
     // Text generation
     const poem = await this.generate({
       prompt: `Write a short poem about ${args.topic}`,
-      action: action!
+      action
     })
 
     // Structured output generation
@@ -475,18 +475,18 @@ agent.addCapability({
         title: z.string(),
         tags: z.array(z.string()).length(3)
       }),
-      action: action!
+      action
     })
 
     // With conversation history for context
     const followUp = await this.generate({
       prompt: 'Based on our conversation, suggest a related topic.',
       messages, // pass conversation history from the run function
-      action: action!
+      action
     })
 
     await this.uploadFile({
-      workspaceId: action!.workspace.id,
+      workspaceId: action.workspace.id,
       path: `poems/${metadata.title}.txt`,
       file: poem
     })

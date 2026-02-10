@@ -322,7 +322,7 @@ describe('Agent.generate()', () => {
         // `this` should be the agent, so this.generate() should work
         const result = await this.generate({
           prompt: `Write about ${args.topic}`,
-          action: action!
+          action
         })
         generateResult = result
         return result
@@ -356,7 +356,7 @@ describe('Agent.generate()', () => {
         const result = await this.generate({
           prompt: args.question,
           messages,
-          action: action!
+          action
         })
         return result
       }

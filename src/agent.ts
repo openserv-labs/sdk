@@ -126,7 +126,7 @@ type RunnableCapabilityConfig<M extends string, S extends z.ZodTypeAny> = {
   description: string
   run(
     this: Agent<M>,
-    params: { args: z.infer<S>; action?: ActionSchema },
+    params: { args: z.infer<S>; action: ActionSchema },
     messages: ChatCompletionMessageParam[]
   ): string | Promise<string>
   outputSchema?: never
@@ -1018,15 +1018,18 @@ export class Agent<M extends string = string> {
   /**
    * Handles execution of a specific tool/capability.
    *
+   * The runtime calls this for both task execution (do-task) and chat (respond-chat-message),
+   * always providing the action context in the request body.
+   *
    * @param {Object} req - The request object
    * @param {Object} req.params - Request parameters
    * @param {string} req.params.toolName - Name of the tool to execute
    * @param {Object} req.body - Request body
    * @param {z.infer<z.ZodTypeAny>} [req.body.args] - Arguments for the tool
-   * @param {ActionSchema} [req.body.action] - Action context
+   * @param {ActionSchema} req.body.action - Action context (required)
    * @param {ChatCompletionMessageParam[]} [req.body.messages] - Message history
    * @returns {Promise<{result: string}>} The result of the tool execution
-   * @throws {BadRequest} If tool name is missing or tool is not found
+   * @throws {BadRequest} If tool name is missing, tool is not found, or action is missing
    * @throws {Error} If tool execution fails
    */
   async handleToolRoute(req: {
@@ -1051,6 +1054,10 @@ export class Agent<M extends string = string> {
         throw new BadRequest(
           `Tool "${req.params.toolName}" is a run-less capability handled by the runtime, not by this agent.`
         )
+      }
+
+      if (!req.body?.action) {
+        throw new BadRequest('Action context is required for tool execution')
       }
 
       const args = await tool.inputSchema.parseAsync(req.body?.args)

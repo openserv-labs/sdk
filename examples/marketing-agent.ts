@@ -31,7 +31,7 @@ Save the post in markdown format as a file and attach it to the task.`,
       async run({ args, action }) {
         const generatedPost = await this.generate({
           prompt: `Create a compelling ${args.platform} post about: ${args.topic}`,
-          action: action!
+          action
         })
 
         logger.info(`Generated ${args.platform} post: ${generatedPost}`)
@@ -60,7 +60,7 @@ Provide:
       async run({ args, action }) {
         const analysis = await this.generate({
           prompt: `Analyze the engagement metrics for ${args.platform}: ${JSON.stringify(args.metrics)}`,
-          action: action!
+          action
         })
 
         logger.info(`Generated engagement analysis for ${args.platform}: ${analysis}`)

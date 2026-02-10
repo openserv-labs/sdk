@@ -7,6 +7,15 @@ import type { ChatCompletionMessageParam } from 'openai/resources/index.mjs'
 
 const mockApiKey = 'test-key'
 
+const minimalAction = {
+  type: 'do-task' as const,
+  me: { id: 1, name: 'test', kind: 'external' as const, isBuiltByAgentBuilder: false as const },
+  task: { id: 1, description: '', dependencies: [], humanAssistanceRequests: [] },
+  workspace: { id: 1, goal: '', bucket_folder: '', agents: [] },
+  integrations: [],
+  memories: []
+}
+
 // Create a test class that exposes protected/private members for testing
 class TestAgent extends Agent {
   // Public accessors for testing
@@ -16,7 +25,6 @@ class TestAgent extends Agent {
   }
 
   public get testPort() {
-    // @ts-expect-error Accessing private member for testing
     return this.port
   }
 
@@ -57,7 +65,7 @@ describe('Agent', () => {
     try {
       await agent.handleToolRoute({
         params: { toolName: 'testTool' },
-        body: { args: { input: 123 } }
+        body: { args: { input: 123 }, action: minimalAction }
       })
       assert.fail('Expected error to be thrown')
     } catch (error) {
@@ -92,6 +100,31 @@ describe('Agent', () => {
       assert.ok(handledError instanceof BadRequestError)
       assert.equal(handledError.message, 'Tool "nonexistentTool" not found')
       assert.equal(handledContext?.context, 'handle_tool_route')
+    }
+  })
+
+  test('should reject tool execution when action is missing', async () => {
+    const agent = new Agent({
+      apiKey: mockApiKey,
+      systemPrompt: 'You are a test agent'
+    })
+
+    agent.addCapability({
+      name: 'needsAction',
+      description: 'Tool that needs action',
+      inputSchema: z.object({}),
+      run: async ({ action }) => `type: ${action.type}`
+    })
+
+    try {
+      await agent.handleToolRoute({
+        params: { toolName: 'needsAction' },
+        body: { args: {} }
+      })
+      assert.fail('Expected error to be thrown')
+    } catch (error) {
+      assert.ok(error instanceof BadRequestError)
+      assert.equal((error as InstanceType<typeof BadRequestError>).message, 'Action context is required for tool execution')
     }
   })
 
@@ -1682,7 +1715,7 @@ describe('Agent MCP Integration', () => {
       params: { toolName: 'mcp_context-server_context_tool' },
       body: {
         args: { message: 'Hello from context' },
-        action: undefined // Action context can be undefined
+        action: minimalAction
       }
     })
 
@@ -1735,12 +1768,12 @@ describe('Agent MCP Integration', () => {
 
     const result1 = await agent.handleToolRoute({
       params: { toolName: 'mcp_server-1_shared_tool' },
-      body: { args: { input: 'test1' } }
+      body: { args: { input: 'test1' }, action: minimalAction }
     })
 
     const result2 = await agent.handleToolRoute({
       params: { toolName: 'mcp_server-2_shared_tool' },
-      body: { args: { input: 'test2' } }
+      body: { args: { input: 'test2' }, action: minimalAction }
     })
 
     assert.strictEqual(result1.result, 'Server 1: test1')
@@ -1789,7 +1822,8 @@ describe('Agent MCP Integration', () => {
       await agent.handleToolRoute({
         params: { toolName: 'mcp_error-server_failing_tool' },
         body: {
-          args: { input: 'test' }
+          args: { input: 'test' },
+          action: minimalAction
         }
       })
       assert.fail('Expected error to be thrown')
@@ -1838,7 +1872,8 @@ describe('Agent MCP Integration', () => {
       await agent.handleToolRoute({
         params: { toolName: 'mcp_validation-server_strict_tool' },
         body: {
-          args: { number_field: 42 }
+          args: { number_field: 42 },
+          action: minimalAction
         }
       })
       assert.fail('Expected validation error to be thrown')
@@ -1849,7 +1884,8 @@ describe('Agent MCP Integration', () => {
     const result = await agent.handleToolRoute({
       params: { toolName: 'mcp_validation-server_strict_tool' },
       body: {
-        args: { required_field: 'test', number_field: 42 }
+        args: { required_field: 'test', number_field: 42 },
+        action: minimalAction
       }
     })
 

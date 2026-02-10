@@ -3,6 +3,15 @@ import assert from 'node:assert/strict'
 import { z } from 'zod'
 import { Agent, Capability } from '../src'
 
+const minimalAction = {
+  type: 'do-task' as const,
+  me: { id: 1, name: 'test', kind: 'external' as const, isBuiltByAgentBuilder: false as const },
+  task: { id: 1, description: '', dependencies: [], humanAssistanceRequests: [] },
+  workspace: { id: 1, goal: '', bucket_folder: '', agents: [] },
+  integrations: [],
+  memories: []
+}
+
 describe('Agent Capabilities', () => {
   const mockApiKey = 'test-openserv-key'
 
@@ -23,7 +32,7 @@ describe('Agent Capabilities', () => {
 
     const result = await agent.handleToolRoute({
       params: { toolName: 'testCapability' },
-      body: { args: { input: 'test' } }
+      body: { args: { input: 'test' }, action: minimalAction }
     })
 
     assert.deepStrictEqual(result, { result: 'test' })
@@ -87,13 +96,13 @@ describe('Agent Capabilities', () => {
       agent
         .handleToolRoute({
           params: { toolName: 'tool1' },
-          body: { args: { input: 'test1' } }
+          body: { args: { input: 'test1' }, action: minimalAction }
         })
         .then(result => assert.deepStrictEqual(result, { result: 'test1' })),
       agent
         .handleToolRoute({
           params: { toolName: 'tool2' },
-          body: { args: { input: 'test2' } }
+          body: { args: { input: 'test2' }, action: minimalAction }
         })
         .then(result => assert.deepStrictEqual(result, { result: 'test2' }))
     ])
@@ -167,7 +176,7 @@ describe('Agent Capabilities', () => {
 
     const result = await agent.handleToolRoute({
       params: { toolName: 'legacyTool' },
-      body: { args: { input: 'legacy' } }
+      body: { args: { input: 'legacy' }, action: minimalAction }
     })
 
     assert.deepStrictEqual(result, { result: 'legacy' })
