@@ -790,6 +790,11 @@ export class Agent<M extends string = string> {
     outputSchema?: T
     action: ActionSchema
   }): Promise<string | z.infer<T>> {
+    logger.debug(
+      { prompt: params.prompt, messages: params.messages },
+      'generate: requesting LLM generation via runtime'
+    )
+
     const response = await this.runtimeClient.post('/generate', {
       prompt: params.prompt,
       ...(params.messages ? { messages: params.messages } : {}),
@@ -801,11 +806,16 @@ export class Agent<M extends string = string> {
       if (response.data.object === undefined || response.data.object === null) {
         throw new Error('Runtime returned no structured output for generate() with outputSchema')
       }
+      logger.debug(
+        { object: response.data.object },
+        'generate: received structured output from runtime'
+      )
       return params.outputSchema.parse(response.data.object)
     }
     if (typeof response.data.text !== 'string') {
       throw new Error('Runtime returned no text for generate()')
     }
+    logger.debug({ text: response.data.text }, 'generate: received text response from runtime')
     return response.data.text
   }
 
@@ -841,6 +851,11 @@ export class Agent<M extends string = string> {
       const MAX_ITERATIONS = 10
 
       while (iterationCount < MAX_ITERATIONS) {
+        logger.debug(
+          { messages: currentMessages },
+          `process: sending to OpenAI (iteration ${iterationCount + 1}/${MAX_ITERATIONS})`
+        )
+
         completion = await this.openai.chat.completions.create({
           model: 'gpt-4o',
           messages: currentMessages,
@@ -852,6 +867,18 @@ export class Agent<M extends string = string> {
         }
 
         const lastMessage = completion.choices[0].message
+
+        logger.debug(
+          {
+            content: lastMessage.content,
+            toolCalls: lastMessage.tool_calls?.map(tc => ({
+              name: tc.function?.name,
+              arguments: tc.function?.arguments
+            })),
+            usage: completion.usage
+          },
+          `process: OpenAI responded with finish_reason="${completion.choices[0].finish_reason}"`
+        )
 
         // If there are no tool calls, we're done
         if (!lastMessage.tool_calls?.length) {
@@ -867,6 +894,8 @@ export class Agent<M extends string = string> {
             const { name, arguments: args } = toolCall.function
             const parsedArgs = JSON.parse(args)
 
+            logger.debug({ tool: name, args: parsedArgs }, `process: calling tool "${name}"`)
+
             try {
               // Find the tool in our tools array
               const tool = this.tools.find(t => t.name === name)
@@ -879,6 +908,7 @@ export class Agent<M extends string = string> {
                 // Call the tool's run method with the parsed arguments and bind this
                 result = await tool.run.bind(this)({ args: parsedArgs }, currentMessages)
               } else {
+                logger.debug(`process: tool "${name}" is run-less, delegating to OpenAI shim`)
                 // Shim: use OpenAI with conversation history + description for run-less capabilities
                 const shimCompletion = await this.openai.chat.completions.create({
                   model: 'gpt-4o',
@@ -903,6 +933,8 @@ export class Agent<M extends string = string> {
                 result = shimCompletion.choices[0]?.message?.content || ''
               }
 
+              logger.debug({ tool: name, result }, `process: tool "${name}" returned`)
+
               return {
                 role: 'tool' as const,
                 content: JSON.stringify(result),
@@ -910,6 +942,7 @@ export class Agent<M extends string = string> {
               }
             } catch (error) {
               const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+              logger.error({ tool: name, error: errorMessage }, `process: tool "${name}" failed`)
               this.handleError(error instanceof Error ? error : new Error(errorMessage), {
                 toolCall,
                 context: 'tool_execution'
@@ -943,6 +976,14 @@ export class Agent<M extends string = string> {
    * @protected
    */
   protected async doTask(action: DoTaskActionSchema) {
+    logger.debug(
+      {
+        workspace: action.workspace?.id,
+        task: { id: action.task?.id, description: action.task?.description }
+      },
+      `doTask: received task ${action.task?.id} — "${action.task?.description}"`
+    )
+
     const messages: ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -959,6 +1000,10 @@ export class Agent<M extends string = string> {
 
     const proxyTools = this.tools.filter(t => t.run)
     const runtimeTools = this.tools.filter(t => !t.run)
+
+    logger.debug(
+      `doTask: delegating to runtime /execute — proxy tools: [${proxyTools.map(t => t.name).join(', ')}], runtime tools: [${runtimeTools.map(t => t.name).join(', ')}]`
+    )
 
     try {
       await this.runtimeClient.post('/execute', {
@@ -981,6 +1026,15 @@ export class Agent<M extends string = string> {
    * @protected
    */
   protected async respondToChat(action: RespondChatMessageActionSchema) {
+    const lastMsg = action.messages?.[action.messages.length - 1]
+    logger.debug(
+      {
+        workspace: action.workspace?.id,
+        messages: action.messages?.map(m => ({ author: m.author, message: m.message }))
+      },
+      `respondToChat: received chat — last message from ${lastMsg?.author}: "${lastMsg?.message}"`
+    )
+
     const messages: ChatCompletionMessageParam[] = [
       {
         role: 'system',
@@ -999,6 +1053,10 @@ export class Agent<M extends string = string> {
 
     const proxyTools = this.tools.filter(t => t.run)
     const runtimeTools = this.tools.filter(t => !t.run)
+
+    logger.debug(
+      `respondToChat: delegating to runtime /chat — proxy tools: [${proxyTools.map(t => t.name).join(', ')}], runtime tools: [${runtimeTools.map(t => t.name).join(', ')}]`
+    )
 
     try {
       await this.runtimeClient.post('/chat', {
@@ -1060,9 +1118,20 @@ export class Agent<M extends string = string> {
         throw new BadRequest('Action context is required for tool execution')
       }
 
+      logger.debug(
+        { tool: req.params.toolName, args: req.body?.args },
+        `handleToolRoute: runtime calling tool "${req.params.toolName}" with args: ${JSON.stringify(req.body?.args)}`
+      )
+
       const args = await tool.inputSchema.parseAsync(req.body?.args)
       const messages = req.body.messages || []
       const result = await tool.run.call(this, { args, action: req.body.action }, messages)
+
+      logger.debug(
+        { tool: req.params.toolName, result },
+        `handleToolRoute: tool "${req.params.toolName}" returned: ${typeof result === 'string' ? result.slice(0, 500) : JSON.stringify(result).slice(0, 500)}`
+      )
+
       return { result }
     } catch (error) {
       this.handleError(error instanceof Error ? error : new Error(String(error)), {
@@ -1085,6 +1154,21 @@ export class Agent<M extends string = string> {
   async handleRootRoute(req: { body: unknown }) {
     try {
       const action = req.body as ActionSchema
+
+      if (action.type === 'do-task') {
+        logger.debug(
+          `handleRootRoute: received "${action.type}" — workspace ${action.workspace?.id}, task ${(action as DoTaskActionSchema).task?.id}`
+        )
+      } else if (action.type === 'respond-chat-message') {
+        const chatAction = action as RespondChatMessageActionSchema
+        const lastMsg = chatAction.messages?.[chatAction.messages.length - 1]
+        logger.debug(
+          `handleRootRoute: received "${action.type}" — workspace ${action.workspace?.id}, last message: "${lastMsg?.message?.slice(0, 200)}"`
+        )
+      } else {
+        logger.debug({ body: req.body }, 'handleRootRoute: received unknown action type')
+      }
+
       if (action.type === 'do-task') {
         this.doTask(action)
       } else if (action.type === 'respond-chat-message') {

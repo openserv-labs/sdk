@@ -259,7 +259,12 @@ export class MCPClient<T extends string> {
       return []
     }
 
-    return response.tools as MCPToolDescriptor[]
+    const tools = response.tools as MCPToolDescriptor[]
+    logger.debug(
+      `MCP: server "${this.serverId}" discovered tools: [${tools.map(t => t.name).join(', ')}]`
+    )
+
+    return tools
   }
 
   /**
@@ -297,14 +302,22 @@ export class MCPClient<T extends string> {
       throw new McpError(MCPErrorCodes.CONNECTION_CLOSED, 'Client not connected or initialized')
     }
 
+    logger.debug({ args: parameters }, `MCP: calling "${toolName}" on server "${this.serverId}"`)
+
     try {
       const result = await this.client.callTool({
         name: toolName,
         arguments: parameters
       })
 
+      logger.debug({ result }, `MCP: "${toolName}" on server "${this.serverId}" returned`)
+
       return result
     } catch (e) {
+      logger.error(
+        { error: e instanceof Error ? e.message : String(e) },
+        `MCP: "${toolName}" on server "${this.serverId}" failed`
+      )
       throw new McpError(
         MCPErrorCodes.INTERNAL_ERROR,
         `Failed to execute tool ${toolName} on server ${this.serverId}: ${e instanceof Error ? e.message : String(e)}`
