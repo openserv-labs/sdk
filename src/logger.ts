@@ -7,7 +7,7 @@ export const createLogger = () => {
 
   return pino({
     name: 'openserv-agent',
-    level: process.env.LOG_LEVEL || 'info',
+    level: process.env.LOG_LEVEL || 'debug',
     transport: isPretty
       ? {
           target: 'pino-pretty',
