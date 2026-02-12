@@ -53,11 +53,26 @@ import type {
   ChatCompletionTool,
   ChatCompletion
 } from 'openai/resources/chat/completions'
-import { zodToJsonSchema } from 'zod-to-json-schema'
-import { jsonSchemaToZod } from '@n8n/json-schema-to-zod'
-
 import OpenAI from 'openai'
 import { z } from 'zod'
+
+import { zodToJsonSchema as zodToJsonSchemaV3 } from 'zod-to-json-schema'
+import { jsonSchemaToZod as jsonSchemaToZodV3 } from '@n8n/json-schema-to-zod'
+
+// Zod v4 has native toJSONSchema/fromJSONSchema. For v3 we use third-party libs.
+function zodToJsonSchema(schema: z.ZodTypeAny, opts?: any): any {
+  if (typeof (z as any).toJSONSchema === 'function') {
+    return (z as any).toJSONSchema(schema)
+  }
+  return zodToJsonSchemaV3(schema, opts)
+}
+
+function jsonSchemaToZodSchema(jsonSchema: Record<string, unknown>): z.ZodTypeAny {
+  if (typeof (z as any).fromJSONSchema === 'function') {
+    return (z as any).fromJSONSchema(jsonSchema)
+  }
+  return jsonSchemaToZodV3(jsonSchema as any)
+}
 import { Capability } from './capability'
 import {
   McpError,
@@ -1349,7 +1364,7 @@ export class Agent<M extends string = string> {
       this.addCapability({
         name: capabilityName,
         description: tool.description || `Tool from MCP server ${serverId}`,
-        inputSchema: jsonSchemaToZod(inputSchema),
+        inputSchema: jsonSchemaToZodSchema(inputSchema),
         async run({ args }) {
           const mcpClient = this.mcpClients[serverId]
           if (!mcpClient) {
