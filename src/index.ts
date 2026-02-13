@@ -12,22 +12,4 @@ export type {
 export { run } from './run'
 export type { RunOptions, RunResult } from './run'
 
-export type {
-  TaskStatus,
-  GetFilesParams,
-  UploadFileParams,
-  DeleteFileParams,
-  MarkTaskAsErroredParams,
-  CompleteTaskParams,
-  SendChatMessageParams,
-  GetTaskDetailParams,
-  GetAgentsParams,
-  GetTasksParams,
-  CreateTaskParams,
-  AddLogToTaskParams,
-  RequestHumanAssistanceParams,
-  UpdateTaskStatusParams,
-  ProcessParams,
-  CapabilityFuncParams,
-  GetChatMessagesParams
-} from './types'
+export * from './types'
